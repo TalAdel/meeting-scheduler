@@ -1,0 +1,69 @@
+
+services:
+  db:
+    image: postgres:15
+    container_name: meeting_scheduler_db
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+#     image: postgres:16-alpine
+#     container_name: meeting-scheduler-db
+#     restart: unless-stopped
+#     environment:
+#       POSTGRES_USER: ${DB_USER}
+#       POSTGRES_PASSWORD: ${DB_PASSWORD}
+#       POSTGRES_DB: ${DB_NAME}
+#     ports:
+#       - "${DB_PORT}:5432"
+#     volumes:
+#       - postgres_data:/var/lib/postgresql/data
+#     networks:
+#       - app-network
+#     healthcheck:
+#       test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+#       interval: 10s
+#       timeout: 5s
+#       retries: 5
+
+#   backend:
+#     build:
+#       context: ./backend
+#       dockerfile: Dockerfile
+#     container_name: meeting-scheduler-api
+#     restart: unless-stopped
+#     depends_on:
+#       postgres:
+#         condition: service_healthy
+#     environment:
+#       NODE_ENV: development
+#       PORT: 3000  
+#       DB_HOST: postgres
+#       DB_PORT: 5432
+#       DB_USER: ${DB_USER}
+#       DB_PASSWORD: ${DB_PASSWORD}
+#       DB_NAME: ${DB_NAME}
+
+#     ports:
+#       - "${API_PORT}:3000"
+#     networks:
+#       - app-network
+#     volumes:
+#       - ./backend:/app
+#       - ./app/node_modules
+
+# volumes:
+#   postgres_data:
+#     driver: local
+
+# networks:
+#   app-network:
+#     driver: bridge

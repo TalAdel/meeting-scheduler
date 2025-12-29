@@ -1,0 +1,19 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+#dependencies
+node_modules
+
+# Docker 
+docker-compose.override.yml
+
+# OS
+.DS_Store
+.vscode
+*.log
+
+# Docker volumes 
+postgres_data/
+EOF 
