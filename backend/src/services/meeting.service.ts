@@ -181,23 +181,11 @@ class MeetingService{
         const finalStartTime = validUserUpdates.startTime ?? existing.startTime;
         const finalEndTime = validUserUpdates.endTime ?? existing.endTime;
     
-        // // DEBUG: Log the values being compared
-        // console.log('=== UPDATE VALIDATION DEBUG ===');
-        // console.log('validUserUpdates.startTime:', validUserUpdates.startTime, typeof validUserUpdates.startTime);
-        // console.log('validUserUpdates.endTime:', validUserUpdates.endTime, typeof validUserUpdates.endTime);
-        // console.log('existing.startTime:', existing.startTime, typeof existing.startTime);
-        // console.log('existing.endTime:', existing.endTime, typeof existing.endTime);
-        // console.log('finalStartTime:', finalStartTime, typeof finalStartTime);
-        // console.log('finalEndTime:', finalEndTime, typeof finalEndTime);
-        // console.log('finalEndTime <= finalStartTime:', finalEndTime <= finalStartTime);
-        // console.log('finalEndTime.getTime():', finalEndTime.getTime());
-        // console.log('finalStartTime.getTime():', finalStartTime.getTime());
-        // console.log('==============================');
     
         if (finalEndTime <= finalStartTime) {
           throw new CustomError(
             400,
-            'End time must be after start time'
+            'End time must be after start time change it too'
           );
         }
         if(finalStartTime < new Date() || finalEndTime < new Date()){

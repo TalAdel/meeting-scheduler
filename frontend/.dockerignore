@@ -4,11 +4,9 @@ npm-debug.log
 .env
 .env.local
 .git
-.gitignore
-.dockerignore
 *.md
 .vscode
 .idea
 .DS_Store
-*.log
 coverage
+*.log

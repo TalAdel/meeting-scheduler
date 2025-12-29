@@ -4,14 +4,15 @@ import userRoutes from "./routes/user.routes";
 import errorHandler from "./middlewares/error-handler";
 import { CustomError } from "./lib/custom-error";
 import meetingRoutes from "./routes/meetings.routes";
-// import cors from "cors";
+import cors from "cors";
 
 const app = express();
 
-// app.use(cors({
-//     origin: process.env.FRONTEND_URL,
-//     credentials: true,
-// }));
+// Enable CORS for frontend
+app.use(cors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    credentials: true,
+}));
 
 
 app.use(express.json());
