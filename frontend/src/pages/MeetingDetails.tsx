@@ -1,532 +1,374 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import Layout from '../components/Layout';
-import { getMeetingById, updateAttendanceStatus, deleteMeeting, getMeetingParticipants } from '../services/meeting.api';
-import type { Meeting } from '../types/meeting.types';
-import { AttendingStatus } from '../types/meeting.types';
-import { useAuth } from '../context/AuthContext';
+import { useEffect, useState, useRef } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { Button } from '../components/ui/Button'
+import { Card, CardContent, CardHeader } from '../components/ui/Card'
+import { StatusBadge } from '../components/ui/StatusBadge'
+import { formatDate, formatTime, cn } from '../lib/utils'
+import {
+  Calendar,
+  Clock,
+  MapPin,
+  ArrowLeft,
+  CheckCircle,
+  XCircle,
+  HelpCircle,
+  ChevronDown,
+} from 'lucide-react'
 
 /**
- * Meeting Details Page
+ * MeetingDetailsPage Component
  * 
- * Shows full meeting information including:
- * - Meeting details
- * - Participant list with status management
- * - Google Maps location
- * - Smart status management UI
+ * WHY? Shows complete meeting information with RSVP functionality
+ * 
+ * The Logic Behind the UX:
+ * 1. Large title and date draw attention to key info
+ * 2. Status dropdown allows easy RSVP changes
+ * 3. Map embed shows location visually
+ * 4. Participant list shows attendance status
+ * 5. Organizer info provides contact context
+ * 
+ * RSVP Flow:
+ * - Pending: Show Accept/Decline buttons
+ * - Confirmed/Declined: Show status with dropdown to change
+ * - Dropdown allows status change at any time
+ * 
+ * State Management:
+ * - userStatus: current user's RSVP status
+ * - isDropdownOpen: dropdown visibility
+ * - Mock data for now (will fetch from API)
  */
 
-interface Participant {
-  id: string;
-  userId: string;
-  email: string;
-  fullName: string;
-  status: string;
-  respondedAt: string | null;
+type AttendingStatus = 'pending' | 'confirmed' | 'declined' | 'attended'
+
+// Mock meeting data
+const mockMeeting = {
+  id: 'm-1',
+  title: 'Q4 Product Roadmap Review',
+  start_time: new Date(Date.now() + 86400000).toISOString(),
+  end_time: new Date(Date.now() + 90000000).toISOString(),
+  location: 'Conference Room A',
+  notes:
+    'Reviewing the upcoming features for Q4. Please bring your status reports.',
+  owner_id: 'user-1',
+  participants: [
+    { email: 'sarah@example.com', status: 'confirmed' as const, name: 'Sarah Jones' },
+    { email: 'mike@example.com', status: 'pending' as const, name: 'Mike Chen' },
+    { email: 'alex.morgan@example.com', status: 'pending' as const, name: 'Alex Morgan' },
+  ],
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+}
+
+const mockUser = {
+  email: 'alex.morgan@example.com',
 }
 
 function MeetingDetails() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const { user } = useAuth();
+  const { id: meetingId } = useParams()
+  const navigate = useNavigate()
+  const [userStatus, setUserStatus] = useState<AttendingStatus>('pending')
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   
-  const [meeting, setMeeting] = useState<Meeting | null>(null);
-  const [participants, setParticipants] = useState<Participant[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  // Use meetingId for future API calls
+  console.log('Meeting ID:', meetingId)
 
+  // Initialize user status from meeting data
   useEffect(() => {
-    loadMeetingDetails();
-  }, [id]);
-
-  const loadMeetingDetails = async () => {
-    if (!id) return;
-
-    try {
-      setLoading(true);
-      setError('');
-      
-      // Load meeting details and participants in parallel
-      const [meetingData, participantsData] = await Promise.all([
-        getMeetingById(id),
-        getMeetingParticipants(id)
-      ]);
-      
-      setMeeting(meetingData);
-      setParticipants(participantsData);
-      
-    } catch (err: any) {
-      console.error('Failed to load meeting:', err);
-      setError(err.response?.data?.message || 'Failed to load meeting details');
-    } finally {
-      setLoading(false);
+    const participant = mockMeeting.participants.find(
+      (p) => p.email === mockUser.email,
+    )
+    if (participant) {
+      setUserStatus(participant.status)
     }
-  };
+  }, [])
 
-  const handleStatusChange = async (newStatus: string) => {
-    if (!id) return;
-
-    try {
-      await updateAttendanceStatus(id, newStatus as typeof AttendingStatus[keyof typeof AttendingStatus]);
-      await loadMeetingDetails();
-      alert('Status updated successfully!');
-    } catch (err: any) {
-      console.error('Failed to update status:', err);
-      alert('Failed to update status');
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!id || !meeting) return;
-    
-    const confirmed = window.confirm(
-      `Are you sure you want to delete "${meeting.title}"?\n\nThis action cannot be undone.`
-    );
-    
-    if (!confirmed) return;
-
-    try {
-      await deleteMeeting(id);
-      alert('Meeting deleted successfully');
-      navigate('/home');
-    } catch (err: any) {
-      console.error('Failed to delete meeting:', err);
-      alert('Failed to delete meeting');
-    }
-  };
-
-  const getGoogleMapsSearchUrl = (location: string) => {
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`;
-  };
-
-  const isOwner = meeting && meeting.ownerId === user?.id;
-
-  if (loading) {
-    return (
-      <Layout>
-        <div>
-          <h1>Meeting Details</h1>
-          <p>Loading...</p>
-        </div>
-      </Layout>
-    );
+  const handleStatusChange = (status: AttendingStatus) => {
+    setUserStatus(status)
+    // TODO: Call API to update status
+    console.log('Updating status to:', status)
+    setIsDropdownOpen(false)
   }
 
-  if (error || !meeting) {
-    return (
-      <Layout>
-        <div>
-          <h1>Meeting Details</h1>
-          <p style={{ color: '#e74c3c' }}>{error || 'Meeting not found'}</p>
-          <button
-            onClick={() => navigate('/home')}
-            style={{
-              padding: '0.75rem 1.5rem',
-              fontSize: '1rem',
-              cursor: 'pointer',
-              border: '1px solid #ccc',
-              background: 'white',
-              borderRadius: '4px',
-              marginTop: '1rem'
-            }}
-          >
-            ← Back to Meetings
-          </button>
-        </div>
-      </Layout>
-    );
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
+
+  const getStatusIcon = (status: AttendingStatus) => {
+    switch (status) {
+      case 'confirmed':
+        return <CheckCircle className="w-4 h-4 text-green-600" />
+      case 'declined':
+        return <XCircle className="w-4 h-4 text-red-600" />
+      case 'pending':
+        return <HelpCircle className="w-4 h-4 text-yellow-600" />
+      default:
+        return null
+    }
   }
 
-  const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map(n => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
-  };
+  const getStatusLabel = (status: AttendingStatus) => {
+    switch (status) {
+      case 'confirmed':
+        return 'Attending'
+      case 'declined':
+        return 'Declined'
+      case 'pending':
+        return 'Pending'
+      default:
+        return status
+    }
+  }
 
   return (
-    <Layout>
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-        {/* Back Button */}
-        <button
+    <div className="max-w-4xl mx-auto space-y-6">
+      <Button
+        variant="ghost"
+        className="pl-0 hover:bg-transparent hover:text-indigo-600"
           onClick={() => navigate('/home')}
-          style={{
-            padding: '0.5rem 1rem',
-            fontSize: '0.9rem',
-            cursor: 'pointer',
-            border: 'none',
-            background: 'transparent',
-            color: '#3498db',
-            marginBottom: '1rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem'
-          }}
-        >
-          ← Back to Meetings
-        </button>
+      >
+        <ArrowLeft className="w-4 h-4 mr-2" />
+        Back to Meetings
+      </Button>
 
-        {/* Meeting Header Card */}
-        <div style={{
-          background: 'white',
-          padding: '2rem',
-          borderRadius: '8px',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-          marginBottom: '1.5rem'
-        }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start'
-          }}>
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
             <div>
-              <h1 style={{ margin: '0 0 1rem 0', fontSize: '2rem' }}>
-                {meeting.title}
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            {mockMeeting.title}
               </h1>
-              
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '1rem',
-                color: '#7f8c8d',
-                fontSize: '1rem'
-              }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  📅 {new Date(meeting.startTime).toLocaleDateString('en-US', { 
-                    weekday: 'short',
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric'
-                  })}
+          <div className="flex flex-wrap gap-4 text-gray-600">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-indigo-500" />
+              <span>{formatDate(mockMeeting.start_time)}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-indigo-500" />
+              <span>
+                {formatTime(mockMeeting.start_time)} -{' '}
+                {formatTime(mockMeeting.end_time)}
                 </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  🕐 {new Date(meeting.startTime).toLocaleTimeString('en-US', {
-                    hour: 'numeric',
-                    minute: '2-digit'
-                  })} - {new Date(meeting.endTime).toLocaleTimeString('en-US', {
-                    hour: 'numeric',
-                    minute: '2-digit'
-                  })}
-                </span>
+            </div>
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
-              {!isOwner ? (
-                // Participant: Accept/Decline buttons
-                <>
-                  <button
-                    onClick={() => handleStatusChange(AttendingStatus.CONFIRMED)}
-                    style={{
-                      padding: '0.75rem 1.5rem',
-                      fontSize: '1rem',
-                      cursor: 'pointer',
-                      border: 'none',
-                      background: '#27ae60',
-                      color: 'white',
-                      borderRadius: '6px',
-                      fontWeight: '600'
-                    }}
+        {/* Status Actions */}
+        <div
+          className="flex items-center gap-2 bg-white p-2 rounded-lg shadow-sm border border-gray-200 relative"
+          ref={dropdownRef}
+        >
+          {userStatus === 'pending' ? (
+            <>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => handleStatusChange('confirmed')}
+                className="bg-green-600 hover:bg-green-700"
                   >
                     Accept
-                  </button>
-                  <button
-                    onClick={() => handleStatusChange(AttendingStatus.DECLINED)}
-                    style={{
-                      padding: '0.75rem 1.5rem',
-                      fontSize: '1rem',
-                      cursor: 'pointer',
-                      border: 'none',
-                      background: '#e74c3c',
-                      color: 'white',
-                      borderRadius: '6px',
-                      fontWeight: '600'
-                    }}
-                  >
-                    Decline
-                  </button>
-                </>
-              ) : (
-                // Owner: Edit/Delete buttons
-                <>
-                  <button
-                    onClick={() => navigate(`/edit-meeting/${id}`)}
-                    style={{
-                      padding: '0.5rem 1rem',
-                      fontSize: '0.9rem',
-                      cursor: 'pointer',
-                      border: '1px solid #3498db',
-                      background: 'white',
-                      color: '#3498db',
-                      borderRadius: '4px'
-                    }}
-                  >
-                    ✏️ Edit
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    style={{
-                      padding: '0.5rem 1rem',
-                      fontSize: '0.9rem',
-                      cursor: 'pointer',
-                      border: '1px solid #e74c3c',
-                      background: 'white',
-                      color: '#e74c3c',
-                      borderRadius: '4px'
-                    }}
-                  >
-                    🗑️ Delete
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Main Content - Two Column Layout */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1.5fr 1fr',
-          gap: '1.5rem'
-        }}>
-          {/* Left Column - Details */}
-          <div>
-            <div style={{
-              background: 'white',
-              padding: '2rem',
-              borderRadius: '8px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-            }}>
-              <h2 style={{ 
-                margin: '0 0 1.5rem 0', 
-                fontSize: '1.5rem',
-                fontWeight: '600'
-              }}>
-                Details
-              </h2>
-
-              {/* Location */}
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h3 style={{
-                  fontSize: '0.9rem',
-                  color: '#7f8c8d',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                  marginBottom: '0.75rem',
-                  fontWeight: '600'
-                }}>
-                  Location
-                </h3>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                  <span style={{ fontSize: '1.1rem' }}>📍</span>
-                  <span style={{ fontSize: '1rem' }}>{meeting.location}</span>
-                </div>
-                
-                {/* Google Map Embed */}
-                <div style={{ 
-                  width: '100%', 
-                  height: '250px', 
-                  borderRadius: '8px',
-                  overflow: 'hidden',
-                  border: '1px solid #e0e0e0'
-                }}>
-                  <iframe
-                    width="100%"
-                    height="100%"
-                    frameBorder="0"
-                    style={{ border: 0 }}
-                    src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8&q=${encodeURIComponent(meeting.location)}`}
-                    allowFullScreen
-                  />
-                </div>
-                <a
-                  href={getGoogleMapsSearchUrl(meeting.location)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: 'inline-block',
-                    marginTop: '0.75rem',
-                    color: '#3498db',
-                    textDecoration: 'none',
-                    fontSize: '0.9rem'
-                  }}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleStatusChange('declined')}
+                className="text-red-600 hover:bg-red-50 border-red-200"
+              >
+                Decline
+              </Button>
+            </>
+          ) : (
+            <div className="relative">
+              <div className="flex items-center gap-2">
+                <div
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-1.5 rounded-md font-medium text-sm border',
+                    userStatus === 'confirmed'
+                      ? 'bg-green-50 text-green-700 border-green-200'
+                      : userStatus === 'declined'
+                        ? 'bg-red-50 text-red-700 border-red-200'
+                        : 'bg-yellow-50 text-yellow-700 border-yellow-200',
+                  )}
                 >
-                  View larger map →
-                </a>
+                  {getStatusIcon(userStatus)}
+                  {getStatusLabel(userStatus)}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 w-9 p-0 rounded-full hover:bg-gray-100"
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                >
+                  <ChevronDown
+                    className={cn(
+                      'w-4 h-4 transition-transform',
+                      isDropdownOpen && 'rotate-180',
+                    )}
+                  />
+                </Button>
               </div>
 
-              {/* Notes */}
-              {meeting.notes && (
-                <div>
-                  <h3 style={{
-                    fontSize: '0.9rem',
-                    color: '#7f8c8d',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px',
-                    marginBottom: '0.75rem',
-                    fontWeight: '600'
-                  }}>
-                    Notes
-                  </h3>
-                  <p style={{ 
-                    margin: 0, 
-                    whiteSpace: 'pre-wrap', 
-                    color: '#2c3e50',
-                    lineHeight: '1.6'
-                  }}>
-                    {meeting.notes}
-                  </p>
+              {/* Dropdown Menu */}
+              {isDropdownOpen && (
+                <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-10 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Change Status
+                  </div>
+
+                  <button
+                    onClick={() => handleStatusChange('confirmed')}
+                    className={cn(
+                      'w-full text-left px-4 py-2 text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors',
+                      userStatus === 'confirmed'
+                        ? 'text-green-700 bg-green-50/50'
+                        : 'text-gray-700',
+                    )}
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    Attending
+                    {userStatus === 'confirmed' && (
+                      <span className="ml-auto text-green-600 text-xs font-medium">
+                        Current
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => handleStatusChange('pending')}
+                    className={cn(
+                      'w-full text-left px-4 py-2 text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors',
+                      'text-gray-700',
+                    )}
+                  >
+                    <HelpCircle className="w-4 h-4" />
+                    Maybe
+                  </button>
+
+                  <button
+                    onClick={() => handleStatusChange('declined')}
+                    className={cn(
+                      'w-full text-left px-4 py-2 text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors',
+                      userStatus === 'declined'
+                        ? 'text-red-700 bg-red-50/50'
+                        : 'text-gray-700',
+                    )}
+                  >
+                    <XCircle className="w-4 h-4" />
+                    Declined
+                    {userStatus === 'declined' && (
+                      <span className="ml-auto text-red-600 text-xs font-medium">
+                        Current
+                      </span>
+                    )}
+                  </button>
                 </div>
               )}
             </div>
+          )}
+        </div>
+        </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Main Content */}
+        <div className="md:col-span-2 space-y-6">
+          <Card>
+            <CardHeader>
+              <h2 className="text-lg font-semibold text-gray-900">Details</h2>
+            </CardHeader>
+            <CardContent className="space-y-6">
+          <div>
+                <h3 className="text-sm font-medium text-gray-500 mb-2">
+                  Location
+                </h3>
+                <div className="flex items-center gap-2 text-gray-900 mb-4">
+                  <MapPin className="w-5 h-5 text-gray-400" />
+                  {mockMeeting.location}
+                </div>
+                {/* Map Placeholder */}
+                <div className="w-full h-64 bg-gray-100 rounded-lg overflow-hidden border border-gray-200 flex items-center justify-center">
+                  <div className="text-center text-gray-500">
+                    <MapPin className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">Map view would appear here</p>
+                  </div>
+                </div>
+              </div>
+
+                <div>
+                <h3 className="text-sm font-medium text-gray-500 mb-2">
+                    Notes
+                  </h3>
+                <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+                  {mockMeeting.notes}
+                  </p>
+                </div>
+            </CardContent>
+          </Card>
           </div>
 
-          {/* Right Column - Participants & Organizer */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            {/* Participants */}
-            <div style={{
-              background: 'white',
-              padding: '2rem',
-              borderRadius: '8px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-            }}>
-              <h2 style={{ 
-                margin: '0 0 1.5rem 0', 
-                fontSize: '1.5rem',
-                fontWeight: '600'
-              }}>
-                Participants {participants.length > 0 && `(${participants.length})`}
+        {/* Sidebar Info */}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <h2 className="text-lg font-semibold text-gray-900">
+                Participants
               </h2>
-              
-              {loading ? (
-                <p style={{ color: '#7f8c8d', fontStyle: 'italic', margin: 0 }}>
-                  Loading participants...
-                </p>
-              ) : participants.length === 0 ? (
-                <p style={{ color: '#7f8c8d', fontStyle: 'italic', margin: 0 }}>
-                  No participants yet
-                </p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {participants.map((participant) => (
-                    <div
-                      key={participant.id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '1rem'
-                      }}
-                    >
-                      <div style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '50%',
-                        background: '#3498db',
-                        color: 'white',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: '600',
-                        fontSize: '1rem',
-                        flexShrink: 0
-                      }}>
-                        {getInitials(participant.fullName)}
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {mockMeeting.participants.map((p, i) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-xs font-medium text-gray-600">
+                        {p.name ? p.name.charAt(0) : p.email.charAt(0)}
                       </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ 
-                          fontWeight: '600',
-                          marginBottom: '0.25rem',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap'
-                        }}>
-                          {participant.fullName}
-                        </div>
-                        <div style={{ 
-                          fontSize: '0.85rem', 
-                          color: '#7f8c8d',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap'
-                        }}>
-                          {participant.email}
-                        </div>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-gray-900">
+                          {p.name || p.email.split('@')[0]}
+                        </span>
+                        <span className="text-xs text-gray-500">{p.email}</span>
                       </div>
-                      <span style={{
-                        padding: '0.35rem 0.75rem',
-                        borderRadius: '4px',
-                        fontSize: '0.85rem',
-                        fontWeight: '600',
-                        background: participant.status === 'confirmed' ? '#d5f4e6' :
-                                   participant.status === 'declined' ? '#ffe0db' : '#fff3cd',
-                        color: participant.status === 'confirmed' ? '#27ae60' :
-                               participant.status === 'declined' ? '#e74c3c' : '#f39c12',
-                        flexShrink: 0
-                      }}>
-                        {participant.status === 'confirmed' && 'Confirmed'}
-                        {participant.status === 'declined' && 'Declined'}
-                        {participant.status === 'pending' && 'Pending'}
-                      </span>
+                    </div>
+                    <StatusBadge status={p.status} />
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
+            </CardContent>
+          </Card>
 
-            {/* Organizer */}
-            <div style={{
-              background: 'white',
-              padding: '2rem',
-              borderRadius: '8px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-            }}>
-              <h2 style={{ 
-                margin: '0 0 1.5rem 0', 
-                fontSize: '1.5rem',
-                fontWeight: '600'
-              }}>
-                Organizer
-              </h2>
-              
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '1rem'
-              }}>
-                <div style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '50%',
-                  background: '#3498db',
-                  color: 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: '600',
-                  fontSize: '1.2rem'
-                }}>
-                  {user && getInitials(user.fullName)}
+          <Card>
+            <CardHeader>
+              <h2 className="text-lg font-semibold text-gray-900">Organizer</h2>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold">
+                  AM
                 </div>
                 <div>
-                  <div style={{ fontWeight: '600', marginBottom: '0.25rem' }}>
-                    {user?.fullName || 'Meeting Owner'}
-                  </div>
-                  <div style={{ fontSize: '0.9rem', color: '#7f8c8d' }}>
-                    {user?.email || ''}
-                  </div>
+                  <p className="text-sm font-medium text-gray-900">
+                    Alex Morgan
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    alex.morgan@example.com
+                  </p>
                 </div>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
-
       </div>
-    </Layout>
-  );
+    </div>
+  )
 }
 
-export default MeetingDetails;
-
+export default MeetingDetails

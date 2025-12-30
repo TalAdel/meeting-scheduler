@@ -1,519 +1,327 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import Layout from '../components/Layout';
-import { getUserMeetings, updateAttendanceStatus, deleteMeeting } from '../services/meeting.api';
-import type { Meeting } from '../types/meeting.types';
-import { AttendingStatus } from '../types/meeting.types';
-import { useAuth } from '../context/AuthContext';
+import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { FilterBar } from '../components/FilterBar'
+import type { FilterState } from '../components/FilterBar'
+import { Card, CardContent } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { Plus, Calendar, Clock, MapPin, ChevronRight } from 'lucide-react'
+import { formatDate, formatTime } from '../lib/utils'
 
 /**
- * Home Page - Displays all user meetings
+ * HomePage Component
  * 
- * Shows upcoming meetings sorted by date (soonest first)
- * User can update their attendance status for each meeting
+ * WHY? Main dashboard showing upcoming meetings with powerful filtering
+ * 
+ * The Logic Behind the UX:
+ * 1. Hero card for next meeting (most important)
+ * 2. Filterable list of upcoming meetings
+ * 3. Quick action button to create new meeting
+ * 4. Participant avatars for quick identification
+ * 5. Empty states guide users to take action
+ * 
+ * State Management:
+ * - Mock data for now (will connect to API later)
+ * - Filter state managed by FilterBar component
+ * - Filtered meetings computed from filters
+ * 
+ * Design Pattern:
+ * - Hero section draws attention to next meeting
+ * - List view for scanning multiple meetings
+ * - Card-based layout for clean organization
  */
 
+// Mock user data (will come from AuthContext)
+const mockUser = {
+  id: 'user-1',
+  fullName: 'Alex Morgan',
+  email: 'alex.morgan@example.com',
+}
+
+// Mock meetings data (will come from API)
+const mockMeetings = [
+  {
+    id: 'm-1',
+    title: 'Q4 Product Roadmap Review',
+    start_time: new Date(Date.now() + 86400000).toISOString(), // Tomorrow
+    end_time: new Date(Date.now() + 90000000).toISOString(),
+    location: 'Conference Room A',
+    notes: 'Reviewing the upcoming features for Q4.',
+    owner_id: 'user-1',
+    participants: [
+      { email: 'sarah@example.com', status: 'confirmed' as const, name: 'Sarah Jones' },
+      { email: 'mike@example.com', status: 'pending' as const, name: 'Mike Chen' },
+    ],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'm-2',
+    title: 'Design Sync',
+    start_time: new Date(Date.now() + 172800000).toISOString(), // Day after tomorrow
+    end_time: new Date(Date.now() + 176400000).toISOString(),
+    location: 'Virtual (Zoom)',
+    notes: 'Weekly design sync.',
+    owner_id: 'user-1',
+    participants: [
+      { email: 'jessica@example.com', status: 'confirmed' as const, name: 'Jessica Wu' },
+    ],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+]
+
 function Home() {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const [meetings, setMeetings] = useState<Meeting[]>([]);
-  const [filteredMeetings, setFilteredMeetings] = useState<Meeting[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  
-  // Filter states
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [startDateFilter, setStartDateFilter] = useState<string>('');
-  const [endDateFilter, setEndDateFilter] = useState<string>('');
+  const [filters, setFilters] = useState<FilterState>({
+    statuses: [],
+    dateRange: 'all',
+    myMeetingsOnly: false,
+  })
 
-  useEffect(() => {
-    loadMeetings();
-  }, []);
+  // Filter and sort meetings
+  const filteredMeetings = useMemo(() => {
+    let filtered = mockMeetings.filter((m) => new Date(m.start_time) > new Date())
 
-  // Apply filters whenever meetings or filter values change
-  useEffect(() => {
-    applyFilters();
-  }, [meetings, statusFilter, startDateFilter, endDateFilter]);
-
-  const applyFilters = () => {
-    let filtered = [...meetings];
-
-    // Filter by status
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(m => {
-        // Owners don't have a status, so skip them for status filtering
-        if (m.ownerId === user?.id) {
-          return false; // Don't show owner meetings when filtering by status
-        }
-        return m.userStatus === statusFilter;
-      });
+    // Filter by status (check if user's status in participants matches)
+    if (filters.statuses.length > 0) {
+      filtered = filtered.filter((meeting) => {
+        const userParticipant = meeting.participants.find(
+          (p) => p.email === mockUser.email,
+        )
+        return (
+          userParticipant && filters.statuses.includes(userParticipant.status)
+        )
+      })
     }
 
     // Filter by date range
-    if (startDateFilter) {
-      const startDate = new Date(startDateFilter);
-      startDate.setHours(0, 0, 0, 0);
-      filtered = filtered.filter(m => new Date(m.startTime) >= startDate);
+    if (filters.dateRange !== 'all') {
+      const now = new Date()
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      filtered = filtered.filter((meeting) => {
+        const meetingDate = new Date(meeting.start_time)
+        switch (filters.dateRange) {
+          case 'today':
+            const tomorrow = new Date(today)
+            tomorrow.setDate(tomorrow.getDate() + 1)
+            return meetingDate >= today && meetingDate < tomorrow
+          case 'week':
+            const weekEnd = new Date(today)
+            weekEnd.setDate(weekEnd.getDate() + 7)
+            return meetingDate >= today && meetingDate < weekEnd
+          case 'month':
+            const monthEnd = new Date(today)
+            monthEnd.setMonth(monthEnd.getMonth() + 1)
+            return meetingDate >= today && meetingDate < monthEnd
+          case 'custom':
+            if (filters.customDateRange) {
+              const startDate = new Date(filters.customDateRange.start)
+              startDate.setHours(0, 0, 0, 0)
+              const endDate = new Date(filters.customDateRange.end)
+              endDate.setHours(23, 59, 59, 999)
+              return meetingDate >= startDate && meetingDate <= endDate
+            }
+            return true
+          default:
+            return true
+        }
+      })
     }
 
-    if (endDateFilter) {
-      const endDate = new Date(endDateFilter);
-      endDate.setHours(23, 59, 59, 999);
-      filtered = filtered.filter(m => new Date(m.startTime) <= endDate);
+    // Filter by ownership
+    if (filters.myMeetingsOnly) {
+      filtered = filtered.filter((meeting) => meeting.owner_id === mockUser.id)
     }
 
-    setFilteredMeetings(filtered);
-  };
+    return filtered.sort(
+      (a, b) =>
+        new Date(a.start_time).getTime() - new Date(b.start_time).getTime(),
+    )
+  }, [filters])
 
-  const loadMeetings = async () => {
-    try {
-      setLoading(true);
-      const data = await getUserMeetings();
-      const now = new Date();
-      
-      // Filter upcoming meetings (haven't started yet) and sort by startTime (soonest first)
-      const upcoming = data.filter(m => new Date(m.startTime) > now);
-      const sorted = upcoming.sort((a, b) => 
-        new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-      );
-      
-      setMeetings(sorted);
-    } catch (err: any) {
-      console.error('Failed to load meetings:', err);
-      setError('Failed to load meetings');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleStatusChange = async (meetingId: string, newStatus: AttendingStatus) => {
-    try {
-      await updateAttendanceStatus(meetingId, newStatus);
-      // Reload meetings to get updated data
-      await loadMeetings();
-    } catch (err: any) {
-      console.error('Failed to update status:', err);
-      alert('Failed to update status');
-    }
-  };
-
-  const handleDelete = async (meetingId: string, meetingTitle: string) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete "${meetingTitle}"?\n\nThis action cannot be undone.`
-    );
-    
-    if (!confirmed) return;
-
-    try {
-      await deleteMeeting(meetingId);
-      alert('Meeting deleted successfully');
-      await loadMeetings();
-    } catch (err: any) {
-      console.error('Failed to delete meeting:', err);
-      alert('Failed to delete meeting: ' + (err.response?.data?.message || err.message));
-    }
-  };
-
-  const formatDateTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const dateStr = date.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-    
-    // Get 24-hour time
-    const time24 = date.toLocaleString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    });
-    
-    // Get 12-hour time with AM/PM
-    const time12 = date.toLocaleString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    });
-    
-    return `${dateStr}, ${time24} (${time12})`;
-  };
-
-  const isOwner = (meeting: Meeting) => meeting.ownerId === user?.id;
-
-  const resetFilters = () => {
-    setStatusFilter('all');
-    setStartDateFilter('');
-    setEndDateFilter('');
-  };
-
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
-  };
+  const nextMeeting = filteredMeetings[0]
+  const otherMeetings = filteredMeetings.slice(1)
 
   return (
-    <Layout>
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-        {/* Welcome Section */}
-        <div style={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          padding: '2rem 2.5rem',
-          borderRadius: '12px',
-          marginBottom: '2rem',
-          color: 'white',
-          boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-        }}>
-          <h1 style={{ 
-            margin: '0 0 0.5rem 0', 
-            fontSize: '2rem',
-            fontWeight: '600'
-          }}>
-            {getGreeting()}, {user?.fullName || 'User'}! 👋
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Welcome back, {mockUser.fullName.split(' ')[0]}
           </h1>
-          <p style={{ 
-            margin: 0, 
-            fontSize: '1.1rem',
-            opacity: 0.95
-          }}>
-            You have {filteredMeetings.length} {filteredMeetings.length === 1 ? 'meeting' : 'meetings'} {statusFilter !== 'all' ? `with status "${statusFilter}"` : 'upcoming'}
+          <p className="text-gray-600 mt-1">
+            Here's what's happening with your schedule.
           </p>
         </div>
+        <Link to="/meetings/new">
+          <Button className="w-full md:w-auto">
+            <Plus className="w-4 h-4 mr-2" />
+            New Meeting
+          </Button>
+        </Link>
+      </div>
 
-        {/* Filter Bar */}
-        <div style={{
-          background: 'white',
-          padding: '1.5rem',
-          borderRadius: '8px',
-          marginBottom: '1.5rem',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-        }}>
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1rem'
-          }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '1rem'
-            }}>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '600' }}>
-                🔍 Filter Meetings
-              </h3>
-              <button
-                onClick={resetFilters}
-                style={{
-                  padding: '0.5rem 1rem',
-                  fontSize: '0.9rem',
-                  cursor: 'pointer',
-                  border: '1px solid #e74c3c',
-                  background: 'white',
-                  color: '#e74c3c',
-                  borderRadius: '6px',
-                  fontWeight: '500',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#e74c3c';
-                  e.currentTarget.style.color = 'white';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'white';
-                  e.currentTarget.style.color = '#e74c3c';
-                }}
-              >
-                🔄 Reset Filters
-              </button>
-            </div>
+      {/* Filter Bar */}
+      <FilterBar onFilterChange={setFilters} />
 
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '1rem'
-            }}>
-              {/* Status Filter */}
-              <div>
-                <label style={{
-                  display: 'block',
-                  marginBottom: '0.5rem',
-                  fontSize: '0.9rem',
-                  fontWeight: '600',
-                  color: '#2c3e50'
-                }}>
-                  Status
-                </label>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    borderRadius: '6px',
-                    border: '1px solid #ddd',
-                    fontSize: '0.95rem',
-                    cursor: 'pointer',
-                    background: 'white'
-                  }}
-                >
-                  <option value="all">All Statuses</option>
-                  <option value="pending">⏳ Pending</option>
-                  <option value="confirmed">✅ Confirmed</option>
-                  <option value="declined">❌ Declined</option>
-                </select>
-              </div>
-
-              {/* Start Date Filter */}
-              <div>
-                <label style={{
-                  display: 'block',
-                  marginBottom: '0.5rem',
-                  fontSize: '0.9rem',
-                  fontWeight: '600',
-                  color: '#2c3e50'
-                }}>
-                  From Date
-                </label>
-                <input
-                  type="date"
-                  value={startDateFilter}
-                  onChange={(e) => setStartDateFilter(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    borderRadius: '6px',
-                    border: '1px solid #ddd',
-                    fontSize: '0.95rem',
-                    cursor: 'pointer'
-                  }}
-                />
-              </div>
-
-              {/* End Date Filter */}
-              <div>
-                <label style={{
-                  display: 'block',
-                  marginBottom: '0.5rem',
-                  fontSize: '0.9rem',
-                  fontWeight: '600',
-                  color: '#2c3e50'
-                }}>
-                  To Date
-                </label>
-                <input
-                  type="date"
-                  value={endDateFilter}
-                  onChange={(e) => setEndDateFilter(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    borderRadius: '6px',
-                    border: '1px solid #ddd',
-                    fontSize: '0.95rem',
-                    cursor: 'pointer'
-                  }}
-                />
-              </div>
-            </div>
-          </div>
+      {/* Results Count */}
+      {(filters.statuses.length > 0 ||
+        filters.dateRange !== 'all' ||
+        filters.myMeetingsOnly) && (
+        <div className="text-sm text-gray-600">
+          Showing{' '}
+          <span className="font-semibold text-gray-900">
+            {filteredMeetings.length}
+          </span>{' '}
+          {filteredMeetings.length === 1 ? 'meeting' : 'meetings'}
         </div>
+      )}
 
-        {/* Loading and Error States */}
-        {loading && <p style={{ textAlign: 'center', color: '#7f8c8d' }}>Loading meetings...</p>}
-        {error && <p style={{ color: '#e74c3c', textAlign: 'center' }}>{error}</p>}
+      {/* Hero Section - Next Meeting */}
+      {nextMeeting ? (
+        <section>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            Up Next
+          </h2>
+          <Card className="border-l-4 border-l-indigo-600 shadow-md">
+            <CardContent className="p-6 md:p-8">
+              <div className="flex flex-col md:flex-row justify-between gap-6">
+                <div className="space-y-4 flex-1">
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-900">
+                      {nextMeeting.title}
+                    </h3>
+                  </div>
 
-        {/* Empty State */}
-        {!loading && meetings.length === 0 && (
-          <div style={{
-            background: 'white',
-            padding: '3rem',
-            borderRadius: '8px',
-            textAlign: 'center',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-          }}>
-            <p style={{ color: '#7f8c8d', fontSize: '1.1rem', margin: '0 0 1rem 0' }}>
-              No upcoming meetings. Create one to get started!
-            </p>
-            <button
-              onClick={() => navigate('/new-meeting')}
-              style={{
-                padding: '0.75rem 1.5rem',
-                fontSize: '1rem',
-                cursor: 'pointer',
-                border: 'none',
-                background: '#3498db',
-                color: 'white',
-                borderRadius: '6px',
-                fontWeight: '600'
-              }}
-            >
-              ➕ Create Meeting
-            </button>
-          </div>
-        )}
-
-        {/* Filtered Empty State */}
-        {!loading && meetings.length > 0 && filteredMeetings.length === 0 && (
-          <div style={{
-            background: 'white',
-            padding: '3rem',
-            borderRadius: '8px',
-            textAlign: 'center',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-          }}>
-            <p style={{ color: '#7f8c8d', fontSize: '1.1rem', margin: 0 }}>
-              No meetings match your filters. Try adjusting your search criteria.
-            </p>
-          </div>
-        )}
-
-        {/* Meetings List */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {filteredMeetings.map(meeting => (
-            <div
-              key={meeting.id}
-              onClick={() => navigate(`/meeting/${meeting.id}`)}
-              style={{
-                background: 'white',
-                padding: '1.5rem',
-                borderRadius: '8px',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                cursor: 'pointer',
-                transition: 'transform 0.2s, box-shadow 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: '1rem' }}>
-                <div style={{ flex: 1 }}>
-                  <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.25rem' }}>
-                    {meeting.title}
-                    {isOwner(meeting) && (
-                      <span style={{
-                        marginLeft: '0.75rem',
-                        fontSize: '0.75rem',
-                        background: '#3498db',
-                        color: 'white',
-                        padding: '0.25rem 0.5rem',
-                        borderRadius: '4px'
-                      }}>
-                        Owner
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-gray-600">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-5 h-5 text-indigo-500" />
+                      <span>{formatDate(nextMeeting.start_time)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-indigo-500" />
+                      <span>
+                        {formatTime(nextMeeting.start_time)} -{' '}
+                        {formatTime(nextMeeting.end_time)}
                       </span>
-                    )}
-                  </h3>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', color: '#7f8c8d' }}>
-                    <p style={{ margin: 0 }}>
-                      <strong>📅 Start:</strong> {formatDateTime(meeting.startTime)}
-                    </p>
-                    <p style={{ margin: 0 }}>
-                      <strong>⏰ End:</strong> {formatDateTime(meeting.endTime)}
-                    </p>
-                    <p style={{ margin: 0 }}>
-                      <strong>📍 Location:</strong> {meeting.location}
-                    </p>
-                    {meeting.notes && (
-                      <p style={{ margin: 0 }}>
-                        <strong>📝 Notes:</strong> {meeting.notes}
-                      </p>
-                    )}
+                    </div>
+                    <div className="flex items-center gap-2 sm:col-span-2">
+                      <MapPin className="w-5 h-5 text-indigo-500" />
+                      <span>{nextMeeting.location}</span>
+                    </div>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', minWidth: '150px' }}>
-                  {isOwner(meeting) ? (
-                    // Owner actions: Edit and Delete
-                    <>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/edit-meeting/${meeting.id}`);
-                        }}
-                        style={{
-                          padding: '0.5rem 1rem',
-                          fontSize: '0.9rem',
-                          cursor: 'pointer',
-                          border: '1px solid #3498db',
-                          background: '#3498db',
-                          color: 'white',
-                          borderRadius: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '0.5rem'
-                        }}
-                      >
-                        ✏️ Edit
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(meeting.id, meeting.title);
-                        }}
-                        style={{
-                          padding: '0.5rem 1rem',
-                          fontSize: '0.9rem',
-                          cursor: 'pointer',
-                          border: '1px solid #e74c3c',
-                          background: '#e74c3c',
-                          color: 'white',
-                          borderRadius: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '0.5rem'
-                        }}
-                      >
-                        🗑️ Delete
-                      </button>
-                    </>
-                  ) : (
-                    // Participant actions: Update status
-                    <>
-                      <label style={{ fontSize: '0.85rem', fontWeight: 'bold' }}>Your Status:</label>
-                      <select
-                        value={meeting.userStatus || AttendingStatus.PENDING}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          handleStatusChange(meeting.id, e.target.value as typeof AttendingStatus[keyof typeof AttendingStatus]);
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                          padding: '0.5rem',
-                          borderRadius: '4px',
-                          border: '1px solid #ccc',
-                          fontSize: '0.9rem',
-                          cursor: 'pointer',
-                          background: meeting.userStatus === 'confirmed' ? '#d5f4e6' :
-                                     meeting.userStatus === 'declined' ? '#ffe0db' : 
-                                     meeting.userStatus === 'pending' ? '#fff3cd' : 'white'
-                        }}
-                      >
-                        <option value={AttendingStatus.PENDING}>⏳ Pending</option>
-                        <option value={AttendingStatus.CONFIRMED}>✅ Confirmed</option>
-                        <option value={AttendingStatus.DECLINED}>❌ Declined</option>
-                      </select>
-                    </>
-                  )}
+                <div className="flex items-end">
+                  <Link
+                    to={`/meeting/${nextMeeting.id}`}
+                    className="w-full md:w-auto"
+                  >
+                    <Button size="lg" className="w-full">
+                      View Details
+                    </Button>
+                  </Link>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </section>
+      ) : (
+        <Card className="bg-gray-50 border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center mb-4">
+              <Calendar className="w-6 h-6 text-gray-500" />
             </div>
-          ))}
-        </div>
-      </div>
-    </Layout>
-  );
+            <h3 className="text-lg font-medium text-gray-900">
+              {filters.statuses.length > 0 ||
+              filters.dateRange !== 'all' ||
+              filters.myMeetingsOnly
+                ? 'No meetings match your filters'
+                : 'No upcoming meetings'}
+            </h3>
+            <p className="text-gray-500 mt-1 mb-6">
+              {filters.statuses.length > 0 ||
+              filters.dateRange !== 'all' ||
+              filters.myMeetingsOnly
+                ? 'Try adjusting your filters to see more results.'
+                : "You're all caught up! Schedule a new meeting to get started."}
+            </p>
+            <Link to="/meetings/new">
+              <Button variant="outline">Schedule Meeting</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Upcoming List */}
+      {otherMeetings.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            Upcoming Meetings
+          </h2>
+          <div className="grid gap-4">
+            {otherMeetings.map((meeting) => (
+              <Link key={meeting.id} to={`/meeting/${meeting.id}`}>
+                <Card hover className="group">
+                  <CardContent className="flex items-center justify-between p-5">
+                    <div className="flex items-center gap-6">
+                      <div className="flex flex-col items-center justify-center w-14 h-14 bg-indigo-50 rounded-lg text-indigo-700 border border-indigo-100">
+                        <span className="text-xs font-bold uppercase">
+                          {new Date(meeting.start_time).toLocaleDateString(
+                            'en-US',
+                            {
+                              month: 'short',
+                            },
+                          )}
+                        </span>
+                        <span className="text-xl font-bold">
+                          {new Date(meeting.start_time).getDate()}
+                        </span>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
+                          {meeting.title}
+                        </h3>
+                        <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5" />
+                            {formatTime(meeting.start_time)}
+                          </span>
+                          <span>•</span>
+                          <span className="truncate max-w-[200px]">
+                            {meeting.location}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="hidden sm:flex -space-x-2">
+                        {meeting.participants.slice(0, 3).map((p, i) => (
+                          <div
+                            key={i}
+                            className="w-8 h-8 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-xs font-medium text-gray-600"
+                          >
+                            {p.name ? p.name.charAt(0) : p.email.charAt(0)}
+                          </div>
+                        ))}
+                        {meeting.participants.length > 3 && (
+                          <div className="w-8 h-8 rounded-full bg-gray-100 border-2 border-white flex items-center justify-center text-xs font-medium text-gray-500">
+                            +{meeting.participants.length - 3}
+                          </div>
+                        )}
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-indigo-500 transition-colors" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  )
 }
 
-export default Home;
-
+export default Home

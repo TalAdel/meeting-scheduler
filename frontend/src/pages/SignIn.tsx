@@ -1,196 +1,143 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { signIn } from '../services/auth.api';
-import { useAuth } from '../context/AuthContext';
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { signIn } from '../services/auth.api'
+import { useAuth } from '../context/AuthContext'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Calendar, Mail, Lock } from 'lucide-react'
 
 /**
- * SignIn Component
+ * SignInPage Component
  * 
- * Allows existing users to log in
- * After successful login, stores token and redirects to home
+ * WHY this design?
+ * - Consistent with SignUp page for familiar UX
+ * - Clear visual hierarchy with centered layout
+ * - Icons provide context and improve scannability
+ * - Loading states prevent confusion during async operations
+ * 
+ * The Logic Behind the UX:
+ * 1. Minimal form fields reduce friction (only email + password)
+ * 2. Clear error messages help users fix issues
+ * 3. Link to sign up for new users (conversion optimization)
+ * 4. Loading spinner prevents double submissions
+ * 
+ * SOLID Principles Applied:
+ * - Single Responsibility: Handles only sign-in UI and logic
+ * - Dependency Inversion: Depends on signIn API abstraction
+ * - Open/Closed: Uses reusable Button and Input components
  */
 
 function SignIn() {
-  const navigate = useNavigate();
-  const { login } = useAuth();
+  const navigate = useNavigate()
+  const { login } = useAuth()
   
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-  });
+  // Form state
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   
-  const [error, setError] = useState<string>('');
-  const [loading, setLoading] = useState(false);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-    // Clear error when user starts typing
-    if (error) setError('');
-  };
+  // UI state
+  const [error, setError] = useState<string>('')
+  const [isLoading, setIsLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    console.log('Submitting form with data:', formData);
+    e.preventDefault()
+    setError('')
+    setIsLoading(true)
 
     try {
-      const response = await signIn(formData);
-      console.log('Login successful:', response);
+      const response = await signIn({ email, password })
+      console.log('Signin successful:', response)
       
-      // Store user and token in context (and localStorage)
-      login(response.user, response.token);
-      
-      // Redirect to home page
-      navigate('/home');
+      // Save auth data and redirect to home
+      login(response.user, response.token)
+      navigate('/home')
       
     } catch (err: any) {
-      console.error('Login error:', err);
-      console.error('Error response:', err.response?.data);
+      console.error('Signin error:', err)
       
-      // Handle validation errors (array of errors)
+      // Handle different error formats from the API
       if (err.response?.data?.errors && Array.isArray(err.response.data.errors)) {
-        const errorMessages = err.response.data.errors.map((e: any) => e.msg).join(', ');
-        setError(errorMessages);
-      } 
-      // Handle single error message
-      else if (err.response?.data?.message) {
-        setError(err.response.data.message);
-      } 
-      // Fallback to generic error
-      else {
-        setError(err.message || 'Login failed');
+        const errorMessages = err.response.data.errors.map((e: any) => e.msg).join(', ')
+        setError(errorMessages)
+      } else if (err.response?.data?.message) {
+        setError(err.response.data.message)
+      } else {
+        setError(err.message || 'Sign in failed')
       }
     } finally {
-      setLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      alignItems: 'center', 
-      justifyContent: 'center', 
-      minHeight: '100vh',
-      gap: '1rem',
-      padding: '2rem'
-    }}>
-      <h1>Sign In</h1>
-      
-      <form onSubmit={handleSubmit} style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '1rem',
-        width: '100%',
-        maxWidth: '400px'
-      }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <label htmlFor="email">Email</label>
-          <input
-            id="email"
-            type="email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            required
-            style={{
-              padding: '0.75rem',
-              fontSize: '1rem',
-              border: '1px solid #ccc',
-              borderRadius: '4px'
-            }}
-          />
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <label htmlFor="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            name="password"
-            value={formData.password}
-            onChange={handleChange}
-            required
-            style={{
-              padding: '0.75rem',
-              fontSize: '1rem',
-              border: '1px solid #ccc',
-              borderRadius: '4px'
-            }}
-          />
-        </div>
-
-        {error && (
-          <div style={{ 
-            color: '#ff4444', 
-            padding: '0.75rem', 
-            background: '#ffeeee',
-            borderRadius: '4px',
-            fontSize: '0.9rem'
-          }}>
-            {error}
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+        {/* Header with branding */}
+        <div className="text-center mb-8">
+          <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <Calendar className="w-6 h-6 text-white" />
           </div>
-        )}
+          <h1 className="text-2xl font-bold text-gray-900">Welcome back</h1>
+          <p className="text-gray-600 mt-2">
+            Sign in to access your meetings
+          </p>
+        </div>
 
-        <button 
-          type="submit"
-          disabled={loading}
-          style={{
-            padding: '0.75rem',
-            fontSize: '1rem',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            border: 'none',
-            background: loading ? '#ccc' : '#646cff',
-            color: 'white',
-            borderRadius: '4px',
-            marginTop: '0.5rem'
-          }}
-        >
-          {loading ? 'Signing In...' : 'Sign In'}
-        </button>
-      </form>
+        {/* Sign In Form */}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Email Input */}
+          <Input
+            label="Email address"
+            type="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            icon={<Mail className="w-4 h-4" />}
+          />
 
-      <div style={{ 
-        display: 'flex', 
-        gap: '1rem', 
-        marginTop: '1rem',
-        fontSize: '0.9rem'
-      }}>
-        <button 
-          onClick={() => navigate('/signup')}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#646cff',
-            cursor: 'pointer',
-            textDecoration: 'underline'
-          }}
-        >
-          Don't have an account? Sign Up
-        </button>
+          {/* Password Input */}
+          <Input
+            label="Password"
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            icon={<Lock className="w-4 h-4" />}
+          />
+
+          {/* Error Display */}
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+              {error}
+            </div>
+          )}
+
+          {/* Submit Button */}
+          <Button
+            type="submit"
+            className="w-full"
+            size="lg"
+            isLoading={isLoading}
+          >
+            Sign In
+          </Button>
+        </form>
+
+        {/* Sign Up Link */}
+        <div className="mt-6 text-center text-sm text-gray-600">
+          Don't have an account?{' '}
+          <Link
+            to="/signup"
+            className="text-indigo-600 font-medium hover:text-indigo-700"
+          >
+            Sign up
+          </Link>
+        </div>
       </div>
-
-      <button 
-        onClick={() => navigate('/')}
-        style={{
-          background: 'none',
-          border: '1px solid #ccc',
-          padding: '0.5rem 1rem',
-          borderRadius: '4px',
-          cursor: 'pointer',
-          marginTop: '1rem'
-        }}
-      >
-        ← Back to Home
-      </button>
     </div>
-  );
+  )
 }
 
-export default SignIn;
-
+export default SignIn

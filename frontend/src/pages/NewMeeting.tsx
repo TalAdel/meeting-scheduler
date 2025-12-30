@@ -1,316 +1,265 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import Layout from '../components/Layout';
-import { createMeeting } from '../services/meeting.api';
-import { AttendingStatus } from '../types/meeting.types';
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Card, CardContent, CardHeader } from '../components/ui/Card'
+import {
+  Plus,
+  X,
+  Calendar,
+  Clock,
+  MapPin,
+  FileText,
+  UserPlus,
+} from 'lucide-react'
 
 /**
- * New Meeting Page
+ * NewMeetingPage Component
  * 
- * Form to create a new meeting with participants
+ * WHY? Comprehensive form for creating meetings
+ * 
+ * The Logic Behind the UX:
+ * 1. Grouped form fields (Details, Participants) reduce overwhelm
+ * 2. Icons provide visual context for each field
+ * 3. Dynamic participant list shows added emails
+ * 4. Loading state prevents double submissions
+ * 5. Cancel button provides escape route
+ * 
+ * Form Structure:
+ * - Meeting Details: title, start/end time, location, notes
+ * - Participants: dynamic list of email addresses
+ * 
+ * State Management:
+ * - Form fields in local state
+ * - Participants array managed separately
+ * - Loading state for async operations
+ * 
+ * Validation:
+ * - Required fields enforced by HTML5
+ * - Email validation automatic
+ * - End time must be after start time (HTML5 min attribute)
  */
 
-function NewMeeting() {
-  const navigate = useNavigate();
-  
-  const [formData, setFormData] = useState({
-    title: '',
-    startTime: '',
-    endTime: '',
-    location: '',
-    notes: '',
-    emails: '',
-  });
-  
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-    if (error) setError('');
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    try {
-      // Convert comma-separated emails to array
-      const emailArray = formData.emails
-        .split(',')
-        .map(e => e.trim())
-        .filter(e => e.length > 0);
-
-      const meetingData = {
-        title: formData.title,
-        startTime: formData.startTime,
-        endTime: formData.endTime,
-        location: formData.location,
-        notes: formData.notes || undefined,
-        emails: emailArray,
-        status: AttendingStatus.PENDING,
-      };
-
-      await createMeeting(meetingData);
-      alert('Meeting created successfully!');
-      navigate('/home');
-      
-    } catch (err: any) {
-      console.error('Create meeting error:', err);
-      
-      if (err.response?.data?.errors && Array.isArray(err.response.data.errors)) {
-        const errorMessages = err.response.data.errors.map((e: any) => e.msg).join(', ');
-        setError(errorMessages);
-      } else if (err.response?.data?.message) {
-        setError(err.response.data.message);
-      } else {
-        setError(err.message || 'Failed to create meeting');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <Layout>
-      <div style={{ maxWidth: '600px' }}>
-        <h1 style={{ margin: '0 0 1.5rem 0' }}>Create New Meeting</h1>
-
-        <form onSubmit={handleSubmit} style={{
-          background: 'white',
-          padding: '2rem',
-          borderRadius: '8px',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '1.5rem'
-        }}>
-          {/* Basic Information Section */}
-          <div>
-            <h3 style={{ 
-              margin: '0 0 1rem 0', 
-              fontSize: '1.1rem',
-              color: '#2c3e50',
-              borderBottom: '2px solid #3498db',
-              paddingBottom: '0.5rem'
-            }}>
-              📋 Basic Information
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <label htmlFor="title"><strong>Title *</strong></label>
-              <input
-                id="title"
-                type="text"
-                name="title"
-                value={formData.title}
-                onChange={handleChange}
-                required
-                style={{
-                  padding: '0.75rem',
-                  fontSize: '1rem',
-                  border: '1px solid #ccc',
-                  borderRadius: '4px'
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Date & Time Section */}
-          <div>
-            <h3 style={{ 
-              margin: '0 0 1rem 0', 
-              fontSize: '1.1rem',
-              color: '#2c3e50',
-              borderBottom: '2px solid #3498db',
-              paddingBottom: '0.5rem'
-            }}>
-              🕐 Date & Time
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <label htmlFor="startTime"><strong>Start Time *</strong></label>
-                <input
-                  id="startTime"
-                  type="datetime-local"
-                  name="startTime"
-                  value={formData.startTime}
-                  onChange={handleChange}
-                  required
-                  style={{
-                    padding: '0.75rem',
-                    fontSize: '1rem',
-                    border: '1px solid #ccc',
-                    borderRadius: '4px'
-                  }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <label htmlFor="endTime"><strong>End Time *</strong></label>
-                <input
-                  id="endTime"
-                  type="datetime-local"
-                  name="endTime"
-                  value={formData.endTime}
-                  onChange={handleChange}
-                  required
-                  style={{
-                    padding: '0.75rem',
-                    fontSize: '1rem',
-                    border: '1px solid #ccc',
-                    borderRadius: '4px'
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Location Section */}
-          <div>
-            <h3 style={{ 
-              margin: '0 0 1rem 0', 
-              fontSize: '1.1rem',
-              color: '#2c3e50',
-              borderBottom: '2px solid #3498db',
-              paddingBottom: '0.5rem'
-            }}>
-              📍 Location
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <label htmlFor="location"><strong>Meeting Location *</strong></label>
-              <input
-                id="location"
-                type="text"
-                name="location"
-                value={formData.location}
-                onChange={handleChange}
-                required
-                placeholder="e.g., Conference Room A, Zoom Link"
-                style={{
-                  padding: '0.75rem',
-                  fontSize: '1rem',
-                  border: '1px solid #ccc',
-                  borderRadius: '4px'
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Participants Section */}
-          <div>
-            <h3 style={{ 
-              margin: '0 0 1rem 0', 
-              fontSize: '1.1rem',
-              color: '#2c3e50',
-              borderBottom: '2px solid #3498db',
-              paddingBottom: '0.5rem'
-            }}>
-              👥 Participants
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <label htmlFor="emails"><strong>Participant Emails</strong></label>
-              <input
-                id="emails"
-                type="text"
-                name="emails"
-                value={formData.emails}
-                onChange={handleChange}
-                placeholder="email1@example.com, email2@example.com"
-                style={{
-                  padding: '0.75rem',
-                  fontSize: '1rem',
-                  border: '1px solid #ccc',
-                  borderRadius: '4px'
-                }}
-              />
-              <small style={{ color: '#7f8c8d' }}>Separate multiple emails with commas</small>
-            </div>
-          </div>
-
-          {/* Additional Details Section */}
-          <div>
-            <h3 style={{ 
-              margin: '0 0 1rem 0', 
-              fontSize: '1.1rem',
-              color: '#2c3e50',
-              borderBottom: '2px solid #3498db',
-              paddingBottom: '0.5rem'
-            }}>
-              📝 Additional Details
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <label htmlFor="notes"><strong>Notes / Agenda</strong></label>
-              <textarea
-                id="notes"
-                name="notes"
-                value={formData.notes}
-                onChange={handleChange}
-                rows={4}
-                placeholder="Optional meeting notes or agenda"
-                style={{
-                  padding: '0.75rem',
-                  fontSize: '1rem',
-                  border: '1px solid #ccc',
-                  borderRadius: '4px',
-                  fontFamily: 'inherit',
-                  resize: 'vertical'
-                }}
-              />
-            </div>
-          </div>
-
-          {error && (
-            <div style={{
-              color: '#e74c3c',
-              padding: '0.75rem',
-              background: '#ffeeee',
-              borderRadius: '4px',
-              fontSize: '0.9rem'
-            }}>
-              {error}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              padding: '0.75rem',
-              fontSize: '1rem',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              border: 'none',
-              background: loading ? '#95a5a6' : '#27ae60',
-              color: 'white',
-              borderRadius: '4px',
-              marginTop: '0.5rem'
-            }}
-          >
-            {loading ? 'Creating...' : 'Create Meeting'}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => navigate('/home')}
-            style={{
-              padding: '0.75rem',
-              fontSize: '1rem',
-              cursor: 'pointer',
-              border: '1px solid #ccc',
-              background: 'white',
-              borderRadius: '4px'
-            }}
-          >
-            Cancel
-          </button>
-        </form>
-      </div>
-    </Layout>
-  );
+interface Participant {
+  email: string
+  status: 'pending'
 }
 
-export default NewMeeting;
+function NewMeeting() {
+  const navigate = useNavigate()
+  const [isLoading, setIsLoading] = useState(false)
+  const [participants, setParticipants] = useState<Participant[]>([])
+  const [newParticipantEmail, setNewParticipantEmail] = useState('')
 
+  // Form fields
+  const [title, setTitle] = useState('')
+  const [startTime, setStartTime] = useState('')
+  const [endTime, setEndTime] = useState('')
+  const [location, setLocation] = useState('')
+  const [notes, setNotes] = useState('')
+
+  const handleAddParticipant = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (
+      newParticipantEmail &&
+      !participants.find((p) => p.email === newParticipantEmail)
+    ) {
+      setParticipants([
+        ...participants,
+        {
+          email: newParticipantEmail,
+          status: 'pending',
+        },
+      ])
+      setNewParticipantEmail('')
+    }
+  }
+
+  const removeParticipant = (email: string) => {
+    setParticipants(participants.filter((p) => p.email !== email))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+
+    // TODO: Replace with actual API call
+    console.log('Creating meeting:', {
+      title,
+      startTime,
+      endTime,
+      location,
+      notes,
+      participants,
+    })
+
+    // Simulate API call
+    setTimeout(() => {
+      setIsLoading(false)
+      navigate('/home')
+    }, 1000)
+  }
+
+  return (
+    <div className="max-w-3xl mx-auto">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">
+          Schedule New Meeting
+        </h1>
+        <p className="text-gray-600 mt-1">
+          Fill in the details to invite your team.
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit}>
+        {/* Meeting Details Card */}
+        <Card className="mb-8">
+          <CardHeader>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Meeting Details
+            </h2>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <Input
+              label="Meeting Title"
+              placeholder="e.g., Q4 Roadmap Review"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              maxLength={200}
+            />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Input
+                label="Start Time"
+                type="datetime-local"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                required
+                icon={<Calendar className="w-4 h-4" />}
+              />
+              <Input
+                label="End Time"
+                type="datetime-local"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                min={startTime}
+                required
+                icon={<Clock className="w-4 h-4" />}
+              />
+            </div>
+
+            <Input
+              label="Location"
+              placeholder="e.g., Conference Room A or Zoom Link"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              required
+              maxLength={255}
+              icon={<MapPin className="w-4 h-4" />}
+            />
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Notes / Agenda
+              </label>
+              <div className="relative">
+                <div className="absolute left-3 top-3 text-gray-400">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <textarea
+                  className="w-full min-h-[120px] rounded-lg border border-gray-300 bg-white pl-10 pr-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
+                  placeholder="Add meeting agenda or notes..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Participants Card */}
+        <Card className="mb-8">
+          <CardHeader>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Participants
+            </h2>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-3 mb-6">
+              <div className="flex-1">
+                <Input
+                  placeholder="Enter email address"
+                  type="email"
+                  value={newParticipantEmail}
+                  onChange={(e) => setNewParticipantEmail(e.target.value)}
+                  icon={<UserPlus className="w-4 h-4" />}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleAddParticipant(e)
+                    }
+                  }}
+                />
+              </div>
+              <Button
+                type="button"
+                onClick={handleAddParticipant}
+                variant="secondary"
+              >
+                Add
+              </Button>
+            </div>
+
+            {participants.length > 0 ? (
+              <div className="space-y-2">
+                {participants.map((p) => (
+                  <div
+                    key={p.email}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold text-xs">
+                        {p.email.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="text-sm font-medium text-gray-700">
+                        {p.email}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeParticipant(p.email)}
+                      className="text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500 text-sm border-2 border-dashed border-gray-200 rounded-lg">
+                No participants added yet.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Action Buttons */}
+        <div className="flex items-center justify-end gap-4">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => navigate('/home')}
+          >
+            Cancel
+          </Button>
+          <Button type="submit" size="lg" isLoading={isLoading}>
+            Schedule Meeting
+          </Button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+export default NewMeeting

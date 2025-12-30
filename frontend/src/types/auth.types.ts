@@ -11,6 +11,9 @@ export interface User {
   id: string;
   email: string;
   fullName: string;
+  avatar?: string;
+  title?: string;
+  bio?: string;
   createdAt: string;
   updatedAt: string;
 }
