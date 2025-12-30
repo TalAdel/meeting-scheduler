@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { getMeetingById, updateAttendanceStatus, deleteMeeting } from '../services/meeting.api';
+import { getMeetingById, updateAttendanceStatus, deleteMeeting, getMeetingParticipants } from '../services/meeting.api';
 import type { Meeting } from '../types/meeting.types';
 import { AttendingStatus } from '../types/meeting.types';
 import { useAuth } from '../context/AuthContext';
@@ -44,17 +44,20 @@ function MeetingDetails() {
 
     try {
       setLoading(true);
-      // For now, just load meeting. In production, you'd load participants too
-      const meetingData = await getMeetingById(id);
-      setMeeting(meetingData);
+      setError('');
       
-      // Mock participants data (you'd get this from API)
-      // In production, add an endpoint to get meeting participants
-      setParticipants([]);
+      // Load meeting details and participants in parallel
+      const [meetingData, participantsData] = await Promise.all([
+        getMeetingById(id),
+        getMeetingParticipants(id)
+      ]);
+      
+      setMeeting(meetingData);
+      setParticipants(participantsData);
       
     } catch (err: any) {
       console.error('Failed to load meeting:', err);
-      setError('Failed to load meeting details');
+      setError(err.response?.data?.message || 'Failed to load meeting details');
     } finally {
       setLoading(false);
     }
@@ -90,18 +93,6 @@ function MeetingDetails() {
       console.error('Failed to delete meeting:', err);
       alert('Failed to delete meeting');
     }
-  };
-
-  const formatDateTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
   };
 
   const getGoogleMapsSearchUrl = (location: string) => {
@@ -407,12 +398,16 @@ function MeetingDetails() {
                 fontSize: '1.5rem',
                 fontWeight: '600'
               }}>
-                Participants
+                Participants {participants.length > 0 && `(${participants.length})`}
               </h2>
               
-              {participants.length === 0 ? (
+              {loading ? (
                 <p style={{ color: '#7f8c8d', fontStyle: 'italic', margin: 0 }}>
                   Loading participants...
+                </p>
+              ) : participants.length === 0 ? (
+                <p style={{ color: '#7f8c8d', fontStyle: 'italic', margin: 0 }}>
+                  No participants yet
                 </p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

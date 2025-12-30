@@ -96,19 +96,24 @@ class MeetingRepository{
     /**
      * Finds ALL meetings where the user is involved (as owner OR participant)
      * This is used for the user's home page/dashboard after login
+     * Now includes user's attendance status for each meeting
      */
-    async findAllUserMeetings(userId: string): Promise<Meeting[]> {
+    async findAllUserMeetings(userId: string): Promise<any[]> {
         const query = `
           SELECT DISTINCT m.id, m.title, m.start_time, m.end_time, m.location, 
-                 m.notes, m.owner_id, m.created_at, m.updated_at
+                 m.notes, m.owner_id, m.created_at, m.updated_at,
+                 CASE 
+                   WHEN m.owner_id = $1 THEN NULL
+                   ELSE mu.status
+                 END as user_status
           FROM meetings m
-          LEFT JOIN meeting_users mu ON mu.meeting_id = m.id
+          LEFT JOIN meeting_users mu ON mu.meeting_id = m.id AND mu.user_id = $1
           WHERE m.owner_id = $1           -- Meetings user owns
              OR mu.user_id = $1           -- Meetings user is invited to
           ORDER BY m.start_time ASC
         `;
 
-        const result = await this.pool.query<MeetingRow>(query, [userId]);
+        const result = await this.pool.query<any>(query, [userId]);
 
         return result.rows.map(row => ({
             id: row.id,
@@ -120,6 +125,7 @@ class MeetingRepository{
             ownerId: row.owner_id,
             createdAt: row.created_at,
             updatedAt: row.updated_at,
+            userStatus: row.user_status, // null if owner, otherwise their status
         }));
     }
 

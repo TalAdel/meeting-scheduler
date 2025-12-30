@@ -54,5 +54,13 @@ export const updateAttendanceStatus = async (meetingId: string, status: Attendin
   return response.data;
 };
 
+/**
+ * Get participants for a specific meeting
+ */
+export const getMeetingParticipants = async (meetingId: string): Promise<any[]> => {
+  const response = await axios.get<{ participants: any[] }>(`${API_ENDPOINTS.MEETINGS.BASE}/${meetingId}/participants`);
+  return response.data.participants;
+};
+
 
 

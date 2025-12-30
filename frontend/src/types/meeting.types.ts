@@ -22,6 +22,7 @@ export interface Meeting {
   ownerId: string;
   createdAt: string;
   updatedAt: string;
+  userStatus?: AttendingStatus | null; // User's attendance status (null if owner)
 }
 
 export interface MeetingWithStatus extends Meeting {

@@ -1,7 +1,14 @@
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
 
 services:
   db:
-    image: postgres:15
+    image: postgres:15-alpine
     container_name: meeting_scheduler_db
     environment:
       POSTGRES_USER: ${DB_USER}
@@ -11,7 +18,70 @@ services:
       - "${DB_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
-volumes:
-  postgres_data:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: meeting_scheduler_backend
+    environment:
+      NODE_ENV: development
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: 3000
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    volumes:
+      # Mount source code for hot reload
+      - ./backend/src:/app/src:ro
+      - ./backend/package.json:/app/package.json:ro
+      - ./backend/tsconfig.json:/app/tsconfig.json:ro
+      
+      # CRITICAL: Anonymous volume - keeps container's node_modules
+      # This MUST come AFTER the bind mounts above
+      # Do NOT bind ./backend/node_modules - it breaks everything!
+      - /app/node_modules
+    depends_on:
+      db:
+        condition: service_healthy  # FIX: Proper indentation
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: meeting_scheduler_frontend
+    environment:
+      - VITE_API_URL=http://localhost:${BACKEND_PORT:-3000}/api/v1
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ./frontend/src:/app/src:ro
+      - ./frontend/public:/app/public:ro
+      - ./frontend/index.html:/app/index.html:ro
+      - ./frontend/package.json:/app/package.json:ro
+      - ./frontend/vite.config.ts:/app/vite.config.ts:ro
+      - ./frontend/tsconfig.json:/app/tsconfig.json:ro
+      - ./frontend/tsconfig.app.json:/app/tsconfig.app.json:ro
+      - ./frontend/tsconfig.node.json:/app/tsconfig.node.json:ro
+      
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - app-network
+    restart: unless-stopped

@@ -50,6 +50,15 @@ router.get('/:id',
     res.status(200).json({ meeting });
 });
 
+// Get participants for a specific meeting
+router.get('/:id/participants',
+    authenticate,
+    async (req: Request, res: Response): Promise<void> => {
+    const meetingId = req.params.id;
+    const participants = await meetingUserService.getMeetingParticipants(meetingId);
+    res.status(200).json({ participants });
+});
+
 // Get ALL meetings for authenticated user (owned + invited to)
 router.get('/',
     authenticate,

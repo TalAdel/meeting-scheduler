@@ -12,6 +12,7 @@ import { CustomError } from "../lib/custom-error";
 
     if(err instanceof CustomError){
         res.status(err.statusCode).json({ message: err.message });
+        return; // Fix: prevent sending response twice
     }
    
     res.status(500).json({ message: err.message || 'Internal Server Error' });

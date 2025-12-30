@@ -88,6 +88,42 @@ class MeetingUserService{
 
         return updatedMeetingUser;
     }
+
+    async getMeetingParticipants(meetingId: string): Promise<any[]> {
+        // First verify the meeting exists
+        const meeting = await this.meetingService.getMeetingById(meetingId);
+        if (!meeting) {
+            throw new CustomError(404, 'Meeting not found');
+        }
+
+        // Get all meeting_users for this meeting
+        const meetingUsers = await this.meetingUsersRepository.findByMeetingId(meetingId);
+        
+        if (meetingUsers.length === 0) {
+            return [];
+        }
+
+        // Get user details for each participant
+        const participantsWithDetails = await Promise.all(
+            meetingUsers.map(async (mu) => {
+                const user = await this.userRepository.findUserById(mu.userId);
+                if (!user) {
+                    return null;
+                }
+                return {
+                    id: mu.id,
+                    userId: user.id,
+                    email: user.email,
+                    fullName: user.fullName,
+                    status: mu.status,
+                    respondedAt: mu.respondedAt,
+                };
+            })
+        );
+
+        // Filter out any null values (users that weren't found)
+        return participantsWithDetails.filter(p => p !== null);
+    }
 }
 
 export default MeetingUserService;
