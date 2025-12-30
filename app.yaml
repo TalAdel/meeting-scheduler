@@ -1,0 +1,30 @@
+name: meeting-scheduler
+region: nyc
+
+services:
+  - name: backend
+    source:
+      repo: TalAdel/meeting-scheduler
+      branch: main
+      source_dir: /backend
+    dockerfile_path: Dockerfile
+    http_port: 3000
+    instance_size_slug: basic-xxs
+    instance_count: 1
+    
+  - name: frontend
+    source:
+      repo: TalAdel/meeting-scheduler
+      branch: main
+      source_dir: /frontend
+    dockerfile_path: Dockerfile
+    http_port: 5173
+    instance_size_slug: basic-xxs
+    instance_count: 1
+
+databases:
+  - name: db
+    engine: PG
+    version: "15"
+    production: false
+    cluster_name: meeting-scheduler-db

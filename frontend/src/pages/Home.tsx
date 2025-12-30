@@ -116,14 +116,27 @@ function Home() {
 
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleString('en-US', {
+    const dateStr = date.toLocaleString('en-US', {
       month: 'short',
       day: 'numeric',
-      year: 'numeric',
+      year: 'numeric'
+    });
+    
+    // Get 24-hour time
+    const time24 = date.toLocaleString('en-US', {
       hour: '2-digit',
       minute: '2-digit',
-      hour12: false // Use 24-hour format (17:00 instead of 05:00 PM)
+      hour12: false
     });
+    
+    // Get 12-hour time with AM/PM
+    const time12 = date.toLocaleString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+    
+    return `${dateStr}, ${time24} (${time12})`;
   };
 
   const isOwner = (meeting: Meeting) => meeting.ownerId === user?.id;
