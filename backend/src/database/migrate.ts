@@ -26,51 +26,94 @@ import path from 'path';
 import pool from '../config/database';
 
 /**
- * Smart Migration Runner
+ * Migration System - Runs all .sql files in order
  * 
- * WHY? We need to run ALL migration files in order (001, 002, 003...)
+ * WHY? We need to track which migrations have been applied to avoid re-running them.
  * 
  * The Logic:
- * 1. Read all .sql files from migrations directory
- * 2. Sort them alphabetically (001 comes before 002)
- * 3. Execute each migration in order
- * 4. If one fails, stop and report error
+ * 1. Create a migrations tracking table if it doesn't exist
+ * 2. Read all .sql files from migrations folder
+ * 3. Sort by filename (001, 002, 003, etc.)
+ * 4. Check which have already been run
+ * 5. Run only new migrations in order
+ * 
+ * This is similar to how frameworks like Django, Rails, Laravel handle migrations.
  */
+
+async function createMigrationsTable() {
+    const createTableSQL = `
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            id SERIAL PRIMARY KEY,
+            filename VARCHAR(255) UNIQUE NOT NULL,
+            executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+    `;
+    await pool.query(createTableSQL);
+    console.log('✓ Migrations tracking table ready');
+}
+
+async function getExecutedMigrations(): Promise<string[]> {
+    const result = await pool.query('SELECT filename FROM schema_migrations ORDER BY filename');
+    return result.rows.map(row => row.filename);
+}
+
+async function markMigrationAsExecuted(filename: string) {
+    await pool.query('INSERT INTO schema_migrations (filename) VALUES ($1)', [filename]);
+}
+
 async function executeMigrations() {
     try {
-        console.log('🚀 Starting database migrations...');
-        
-        // Get migrations directory path
+        console.log('🚀 Starting database migrations...\n');
+
+        // Step 1: Create tracking table
+        await createMigrationsTable();
+
+        // Step 2: Get list of already executed migrations
+        const executedMigrations = await getExecutedMigrations();
+        console.log(`✓ Already executed: ${executedMigrations.length} migrations`);
+
+        // Step 3: Read all migration files from folder
         const migrationsDir = path.join(__dirname, 'migrations');
-        
-        // Read all files from migrations directory
-        const files = fs.readdirSync(migrationsDir);
-        
-        // Filter only .sql files and sort them
-        const migrationFiles = files
+        const files = fs.readdirSync(migrationsDir)
             .filter(file => file.endsWith('.sql'))
-            .sort(); // This sorts: 001_xxx.sql, 002_xxx.sql, etc.
-        
-        console.log(`📁 Found ${migrationFiles.length} migration file(s):`);
-        migrationFiles.forEach(file => console.log(`   - ${file}`));
-        
-        // Execute each migration in order
-        for (const file of migrationFiles) {
-            console.log(`\n⚙️  Executing: ${file}`);
-            const migrationPath = path.join(migrationsDir, file);
-            const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
-            
-            await pool.query(migrationSQL);
-            console.log(`✅ Completed: ${file}`);
+            .sort(); // Sort alphabetically (001, 002, 003...)
+
+        console.log(`✓ Found ${files.length} migration files\n`);
+
+        // Step 4: Run new migrations only
+        let newMigrationsCount = 0;
+        for (const file of files) {
+            if (executedMigrations.includes(file)) {
+                console.log(`⊘ Skipping ${file} (already executed)`);
+                continue;
+            }
+
+            console.log(`▶ Running ${file}...`);
+            const filePath = path.join(migrationsDir, file);
+            const sql = fs.readFileSync(filePath, 'utf8');
+
+            // Execute migration
+            await pool.query(sql);
+
+            // Mark as executed
+            await markMigrationAsExecuted(file);
+
+            console.log(`✓ Completed ${file}\n`);
+            newMigrationsCount++;
         }
-        
-        console.log('\n🎉 All migrations completed successfully!');
+
+        if (newMigrationsCount === 0) {
+            console.log('✓ Database is up to date. No new migrations to run.');
+        } else {
+            console.log(`\n✅ Successfully ran ${newMigrationsCount} new migration(s)`);
+        }
+
     } catch (error) {
         console.error('❌ Migration failed:', error);
         throw error;
     } finally {
         await pool.end();
-        console.log('🔒 Database connection closed');
+        console.log('\n🔌 Database connection closed');
     }
 }
 
