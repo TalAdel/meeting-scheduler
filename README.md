@@ -4,15 +4,29 @@ A full-stack meeting management application with JWT authentication, RSVP system
 
 **Live Demo**: [Deployed on DigitalOcean](http://167.99.250.33:5173)
 
-### 🔑 Demo Credentials
+### 🔑 Demo Credentials & Sample Data
 
-To test the application without creating an account, use these credentials:
+The application includes a seed script that creates realistic demo data for easy testing.
 
-| Email | Password |
-|-------|----------|
-| `talf16@gmail.com` | `Tal123456!` |
-| `liran@gmail.com` | `liran123456!` |
-| `yeal@gmail.com` | `yeal123456!` |
+**Demo Accounts:**
+| Email | Password | Name |
+|-------|----------|------|
+| `talf16@gmail.com` | `Tal123456!` | Tal Adler |
+| `liran@gmail.com` | `liran123456!` | Liran Cohen |
+| `yeal@gmail.com` | `yeal123456!` | Yeal Sharon |
+
+**What the seed creates:**
+- ✅ 3 demo users with realistic profiles
+- ✅ 7 meetings across different timelines (past, today, upcoming)
+- ✅ Various RSVP statuses (pending, confirmed, declined, attended)
+- ✅ International locations (Tel Aviv, New York, London, Paris, Tokyo)
+- ✅ Meeting participants with different attendance patterns
+
+**To seed the database:**
+```bash
+# After running migrations
+docker-compose exec backend npm run seed
+```
 
 > **Note**: These are test accounts for demonstration and review purposes only.
 
@@ -98,20 +112,17 @@ docker-compose up --build
 - Backend: `http://localhost:3000/api/v1`
 - Database: PostgreSQL on port `5432`
 
+### Initialize Database with Demo Data
 
-**Demo Credentials**:
-```
-Email: talf16@gmail.com
-Password: Tal123456!
+```bash
+# Run migrations
+docker-compose exec backend npm run migrate
 
-Email: liran@gmail.com
-Password: liran123456!
-
-Email: yeal@gmail.com
-Password: yeal123456!
+# Seed demo data (optional but recommended for testing)
+docker-compose exec backend npm run seed
 ```
 
-> **Note**: These are test accounts for demonstration and testing purposes only.
+This creates 3 users and 7 meetings with realistic data for immediate testing.
 
 ---
 
