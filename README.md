@@ -4,6 +4,18 @@ A full-stack meeting management application with JWT authentication, RSVP system
 
 **Live Demo**: [Deployed on DigitalOcean](http://167.99.250.33:5173)
 
+### 🔑 Demo Credentials
+
+To test the application without creating an account, use these credentials:
+
+| Email | Password |
+|-------|----------|
+| `talf16@gmail.com` | `Tal123456!` |
+| `liran@gmail.com` | `liran123456!` |
+| `yeal@gmail.com` | `yeal123456!` |
+
+> **Note**: These are test accounts for demonstration and review purposes only.
+
 ---
 
 ## Features
@@ -85,6 +97,21 @@ docker-compose up --build
 - Frontend: `http://localhost:5173`
 - Backend: `http://localhost:3000/api/v1`
 - Database: PostgreSQL on port `5432`
+
+
+**Demo Credentials**:
+```
+Email: talf16@gmail.com
+Password: Tal123456!
+
+Email: liran@gmail.com
+Password: liran123456!
+
+Email: yeal@gmail.com
+Password: yeal123456!
+```
+
+> **Note**: These are test accounts for demonstration and testing purposes only.
 
 ---
 
@@ -214,10 +241,7 @@ PATCH  /api/v1/meetings/:meetingId/participants/:userId     # Update participant
 ```
 English:  "Times Square, New York, USA"
 Hebrew:   "דיזנגוף 50, תל אביב"
-French:   "Tour Eiffel, Paris"
-Japanese: "東京タワー"
-Arabic:   "برج خليفة، دبي"
-```
+French:   "Tour Eiffel, Pari
 
 ---
 
