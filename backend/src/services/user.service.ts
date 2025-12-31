@@ -9,14 +9,11 @@ class UserService {
         userId: string, 
         updates: Partial<Pick<User, 'fullName' | 'email'>>
     ): Promise<UserWithoutPassword> {
-        
-        // Check if user exists
         const user = await this.userRepository.findUserById(userId);
         if (!user) {
             throw new CustomError(404, 'User not found');
         }
 
-        // Build updates object with ONLY the fields that were provided
         const actualUpdates: Partial<Pick<User, 'fullName' | 'email'>> = {};
         
         if (updates.fullName !== undefined) {
@@ -24,9 +21,7 @@ class UserService {
         }
         
         if (updates.email !== undefined) {
-            // Check if email is being changed to a different value
             if (updates.email !== user.email) {
-                // Verify new email isn't already taken
                 const existingUser = await this.userRepository.findUserByEmail(updates.email);
                 if (existingUser) {
                     throw new CustomError(400, 'Email already in use');
@@ -35,7 +30,6 @@ class UserService {
             actualUpdates.email = updates.email;
         }
 
-        // If no fields to update, return current user
         if (Object.keys(actualUpdates).length === 0) {
             return {
                 id: user.id,
@@ -46,7 +40,6 @@ class UserService {
             };
         }
 
-        // Update user
         const updatedUser = await this.userRepository.updateUser(userId, actualUpdates);
         
         if (!updatedUser) {
@@ -62,9 +55,6 @@ class UserService {
         };
     }
 
-    /**
-     * Get user profile without password
-     */
     async getUserProfile(userId: string): Promise<UserWithoutPassword> {
         const user = await this.userRepository.findUserWithoutPasswordByEmail(
             (await this.userRepository.findUserById(userId))?.email || ''
@@ -77,9 +67,6 @@ class UserService {
         return user;
     }
 
-    /**
-     * Delete user account
-     */
     async deleteAccount(userId: string): Promise<void> {
         const deleted = await this.userRepository.deleteUser(userId);
         if (!deleted) {

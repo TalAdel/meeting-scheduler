@@ -41,6 +41,8 @@ services:
       DB_NAME: ${DB_NAME}
       JWT_SECRET: ${JWT_SECRET}
       PORT: 3000
+      # Support multiple origins (comma-separated)
+      FRONTEND_URL: http://167.99.250.33:5173
     ports:
       - "${BACKEND_PORT:-3000}:3000"
     volumes:
@@ -55,7 +57,7 @@ services:
       - /app/node_modules
     depends_on:
       db:
-        condition: service_healthy  # FIX: Proper indentation
+        condition: service_healthy
     networks:
       - app-network
     restart: unless-stopped
@@ -67,6 +69,7 @@ services:
     container_name: meeting_scheduler_frontend
     environment:
       - VITE_API_URL=http://167.99.250.33:3000/api/v1
+      - VITE_GOOGLE_MAPS_API_KEY=AIzaSyBj6A07W-JoLVstSNowqde44WhNEoJXq68
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
     volumes:

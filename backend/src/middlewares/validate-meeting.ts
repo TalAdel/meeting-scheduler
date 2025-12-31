@@ -29,12 +29,35 @@ export const MeetingValidation = [
         if (value <= startTime) {
           throw new CustomError(400, 'End time must be after start time');
         }
+        
+        // Check meeting duration (max 8 hours)
+        const durationMs = value.getTime() - startTime.getTime();
+        const durationHours = durationMs / (1000 * 60 * 60);
+        if (durationHours > 8) {
+          throw new CustomError(400, 'Meeting cannot be longer than 8 hours');
+        }
+        
         return true;
       }),
   
     body('location')
+      .optional()
       .trim()
-      .notEmpty().withMessage('Location is required'),
+      .isLength({ max: 500 }).withMessage('Location must be less than 500 characters'),
+  
+    body('locationCountry')
+      .optional()
+      .trim()
+      .isLength({ min: 2, max: 2 }).withMessage('Country code must be 2 characters (ISO 3166-1)')
+      .matches(/^[A-Z]{2}$/).withMessage('Country code must be uppercase letters (e.g., IL, US, FR)'),
+  
+    body('latitude')
+      .optional()
+      .isFloat({ min: -90, max: 90 }).withMessage('Latitude must be between -90 and 90'),
+  
+    body('longitude')
+      .optional()
+      .isFloat({ min: -180, max: 180 }).withMessage('Longitude must be between -180 and 180'),
   
     body('notes')
       .optional()
@@ -53,8 +76,10 @@ export const MeetingValidation = [
       .isISO8601().withMessage('Start time must be a valid ISO 8601 date if provided')
       .toDate()  
       .custom((value) => {
-        if (value < new Date()) {
-          throw new CustomError(400, 'Start time cannot be in the past');
+        // Allow updates to meetings that started up to 5 minutes ago (for timezone tolerance)
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+        if (value < fiveMinutesAgo) {
+          throw new CustomError(400, 'Start time cannot be more than 5 minutes in the past');
         }
         return true;
       }),
@@ -63,32 +88,49 @@ export const MeetingValidation = [
       .optional()  
       .isISO8601().withMessage('End time must be a valid ISO 8601 date if provided')
       .toDate() 
-      .custom((value) => {
-        if (value < new Date()) {
-          throw new CustomError(400, 'End time cannot be in the past');
-        }
-        return true;
-      })
       .custom((value, { req }) => {
         const startTime = req.body.startTime;
-        if (value <= startTime) {
+        if (startTime && value <= startTime) {
           throw new CustomError(400, 'End time must be after start time');
         }
+        
+        // Check meeting duration (max 8 hours) only if both times are provided
+        if (startTime && value) {
+          const durationMs = value.getTime() - startTime.getTime();
+          const durationHours = durationMs / (1000 * 60 * 60);
+          if (durationHours > 8) {
+            throw new CustomError(400, 'Meeting cannot be longer than 8 hours');
+          }
+        }
+        
         return true;
       }),
   
     body('location')
       .optional()  
       .trim()
-      .notEmpty().withMessage('Location cannot be empty if provided')
-      .isLength({ min: 1, max: 200 }).withMessage('Location must be between 1 and 200 characters'),
+      .isLength({ max: 500 }).withMessage('Location must be less than 500 characters'),
+  
+    body('locationCountry')
+      .optional()
+      .trim()
+      .isLength({ min: 2, max: 2 }).withMessage('Country code must be 2 characters')
+      .matches(/^[A-Z]{2}$/).withMessage('Country code must be uppercase letters'),
+  
+    body('latitude')
+      .optional()
+      .isFloat({ min: -90, max: 90 }).withMessage('Latitude must be between -90 and 90'),
+  
+    body('longitude')
+      .optional()
+      .isFloat({ min: -180, max: 180 }).withMessage('Longitude must be between -180 and 180'),
   
     body('notes')
       .optional()
       .trim()
   ];
 
-export const RsvpValidation: ValidationChain[] = [
+export const statusValidation: ValidationChain[] = [
   body('status')
     .notEmpty().withMessage('Status is required')
     .custom((value) => {

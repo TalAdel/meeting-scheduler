@@ -1,11 +1,7 @@
 {
-  // Visit https://aka.ms/tsconfig to read more about this file
   "compilerOptions": {
-    // Environment Settings
-    // See also https://aka.ms/tsconfig/module
     "module": "commonjs",
     "target": "ES2020",
-    // File Layout
     "rootDir": "./src",
     "outDir": "./dist",
     "strict": true,

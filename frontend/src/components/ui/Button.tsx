@@ -2,29 +2,6 @@ import React from 'react'
 import { cn } from '../../lib/utils'
 import { Loader2 } from 'lucide-react'
 
-/**
- * Button Component
- * 
- * WHY? A reusable button component following SOLID principles:
- * - Single Responsibility: Only handles button rendering and styling
- * - Open/Closed: Open for extension (variants), closed for modification
- * 
- * The Logic Behind variants:
- * - primary: Main call-to-action buttons (e.g., "Sign In", "Create Meeting")
- * - secondary: Less prominent actions
- * - outline: Secondary actions that need clear boundaries
- * - ghost: Minimal styling for less important actions
- * - danger: Destructive actions (e.g., "Delete", "Sign Out")
- * 
- * The Logic Behind sizes:
- * - sm: Compact spaces, filters, inline actions
- * - md: Standard size for most buttons
- * - lg: Hero sections, primary CTAs
- * 
- * isLoading prop:
- * - Shows a spinner and disables the button during async operations
- * - Improves UX by giving visual feedback
- */
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger'

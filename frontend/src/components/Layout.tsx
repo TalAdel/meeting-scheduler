@@ -1,12 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-/**
- * Layout Component
- * 
- * Main layout with sidebar navigation
- * WHY? Separation of Concerns - layout is separate from page content
- */
 
 interface LayoutProps {
   children: React.ReactNode;

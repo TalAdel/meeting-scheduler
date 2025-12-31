@@ -47,10 +47,6 @@ class AuthService{
         };
     }
 
-    // async logout(userId: string): Promise<void> {
-
-
-    // }
 
     async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
         const user = await this.userRepository.findUserById(userId);

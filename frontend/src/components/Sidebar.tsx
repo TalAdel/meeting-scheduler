@@ -12,28 +12,6 @@ import {
 import { cn } from '../lib/utils'
 import { Modal } from './ui/Modal'
 
-/**
- * Sidebar Component
- * 
- * WHY? Provides consistent navigation across all authenticated pages
- * 
- * The Logic Behind the UX:
- * 1. Fixed position keeps navigation always accessible
- * 2. Active state highlights current page
- * 3. Icons improve scannability
- * 4. User info at bottom provides context
- * 5. Logout confirmation prevents accidents
- * 
- * Navigation Structure:
- * - My Meetings (home): Dashboard view
- * - New Meeting: Quick action for creating meetings
- * - History: Past meetings
- * - Profile: User settings
- * 
- * SOLID Principles:
- * - Single Responsibility: Only handles sidebar navigation
- * - Dependency Inversion: Depends on useAuth abstraction
- */
 
 export function Sidebar() {
   const { user, logout } = useAuth()

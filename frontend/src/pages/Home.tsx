@@ -1,95 +1,88 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import { FilterBar } from '../components/FilterBar'
 import type { FilterState } from '../components/FilterBar'
 import { Card, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
+import { StatusBadge } from '../components/ui/StatusBadge'
 import { Plus, Calendar, Clock, MapPin, ChevronRight } from 'lucide-react'
 import { formatDate, formatTime } from '../lib/utils'
+import { getUserMeetings } from '../services/meeting.api'
+import type { Meeting } from '../types/meeting.types'
 
 /**
- * HomePage Component
+ * HomePage Component - NOW CONNECTED TO BACKEND!
  * 
  * WHY? Main dashboard showing upcoming meetings with powerful filtering
  * 
- * The Logic Behind the UX:
- * 1. Hero card for next meeting (most important)
- * 2. Filterable list of upcoming meetings
- * 3. Quick action button to create new meeting
- * 4. Participant avatars for quick identification
- * 5. Empty states guide users to take action
+ * The Logic Behind connecting to backend:
+ * 1. useEffect fetches real meetings on mount
+ * 2. Loading state shows while fetching
+ * 3. Error handling for failed requests
+ * 4. Real data from database displays
  * 
- * State Management:
- * - Mock data for now (will connect to API later)
- * - Filter state managed by FilterBar component
- * - Filtered meetings computed from filters
- * 
- * Design Pattern:
- * - Hero section draws attention to next meeting
- * - List view for scanning multiple meetings
- * - Card-based layout for clean organization
+ * Backend Integration:
+ * - GET /api/v1/meetings - Fetches all user meetings
+ * - Returns meetings with userStatus (user's RSVP status)
+ * - Handles both owned and invited meetings
  */
 
-// Mock user data (will come from AuthContext)
-const mockUser = {
-  id: 'user-1',
-  fullName: 'Alex Morgan',
-  email: 'alex.morgan@example.com',
-}
-
-// Mock meetings data (will come from API)
-const mockMeetings = [
-  {
-    id: 'm-1',
-    title: 'Q4 Product Roadmap Review',
-    start_time: new Date(Date.now() + 86400000).toISOString(), // Tomorrow
-    end_time: new Date(Date.now() + 90000000).toISOString(),
-    location: 'Conference Room A',
-    notes: 'Reviewing the upcoming features for Q4.',
-    owner_id: 'user-1',
-    participants: [
-      { email: 'sarah@example.com', status: 'confirmed' as const, name: 'Sarah Jones' },
-      { email: 'mike@example.com', status: 'pending' as const, name: 'Mike Chen' },
-    ],
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 'm-2',
-    title: 'Design Sync',
-    start_time: new Date(Date.now() + 172800000).toISOString(), // Day after tomorrow
-    end_time: new Date(Date.now() + 176400000).toISOString(),
-    location: 'Virtual (Zoom)',
-    notes: 'Weekly design sync.',
-    owner_id: 'user-1',
-    participants: [
-      { email: 'jessica@example.com', status: 'confirmed' as const, name: 'Jessica Wu' },
-    ],
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-]
-
 function Home() {
+  const { user } = useAuth()
   const [filters, setFilters] = useState<FilterState>({
     statuses: [],
     dateRange: 'all',
     myMeetingsOnly: false,
   })
 
+  // Backend integration state
+  const [meetings, setMeetings] = useState<Meeting[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string>('')
+
+  // Fetch meetings from backend
+  useEffect(() => {
+    const fetchMeetings = async () => {
+      try {
+        setIsLoading(true)
+        setError('')
+        const data = await getUserMeetings()
+        setMeetings(data)
+      } catch (err: any) {
+        console.error('Error fetching meetings:', err)
+        setError(err.response?.data?.message || 'Failed to load meetings')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchMeetings()
+  }, [])
+
   // Filter and sort meetings
   const filteredMeetings = useMemo(() => {
-    let filtered = mockMeetings.filter((m) => new Date(m.start_time) > new Date())
+    // Only show upcoming meetings
+    let filtered = meetings.filter((m) => new Date(m.startTime) > new Date())
 
-    // Filter by status (check if user's status in participants matches)
+    // Filter by status (user's RSVP status)
     if (filters.statuses.length > 0) {
       filtered = filtered.filter((meeting) => {
-        const userParticipant = meeting.participants.find(
-          (p) => p.email === mockUser.email,
-        )
-        return (
-          userParticipant && filters.statuses.includes(userParticipant.status)
-        )
+        // Determine effective status
+        let effectiveStatus = meeting.userStatus
+        
+        // If no userStatus but user is owner, treat as confirmed
+        if (!effectiveStatus && meeting.ownerId === user?.id) {
+          effectiveStatus = 'confirmed'
+        }
+        
+        // If still no status, default to pending
+        if (!effectiveStatus) {
+          effectiveStatus = 'pending'
+        }
+        
+        // Check if effective status matches any selected filters
+        return filters.statuses.some(status => status === effectiveStatus)
       })
     }
 
@@ -98,7 +91,7 @@ function Home() {
       const now = new Date()
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
       filtered = filtered.filter((meeting) => {
-        const meetingDate = new Date(meeting.start_time)
+        const meetingDate = new Date(meeting.startTime)
         switch (filters.dateRange) {
           case 'today':
             const tomorrow = new Date(today)
@@ -128,18 +121,52 @@ function Home() {
     }
 
     // Filter by ownership
-    if (filters.myMeetingsOnly) {
-      filtered = filtered.filter((meeting) => meeting.owner_id === mockUser.id)
+    if (filters.myMeetingsOnly && user) {
+      filtered = filtered.filter((meeting) => meeting.ownerId === user.id)
     }
 
     return filtered.sort(
       (a, b) =>
-        new Date(a.start_time).getTime() - new Date(b.start_time).getTime(),
+        new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
     )
-  }, [filters])
+  }, [meetings, filters, user])
 
   const nextMeeting = filteredMeetings[0]
   const otherMeetings = filteredMeetings.slice(1)
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading meetings...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Card className="max-w-md">
+          <CardContent className="p-6 text-center">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Calendar className="w-6 h-6 text-red-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Failed to load meetings
+            </h3>
+            <p className="text-gray-600 mb-4">{error}</p>
+            <Button onClick={() => window.location.reload()}>
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -147,7 +174,7 @@ function Home() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">
-            Welcome back, {mockUser.fullName.split(' ')[0]}
+            Welcome back, {user?.fullName.split(' ')[0]}
           </h1>
           <p className="text-gray-600 mt-1">
             Here's what's happening with your schedule.
@@ -189,6 +216,15 @@ function Home() {
               <div className="flex flex-col md:flex-row justify-between gap-6">
                 <div className="space-y-4 flex-1">
                   <div>
+                    {/* Show status badge - owners are automatically confirmed */}
+                    {nextMeeting.userStatus ? (
+                      <StatusBadge status={nextMeeting.userStatus} className="mb-3" />
+                    ) : nextMeeting.ownerId === user?.id ? (
+                      <StatusBadge status="confirmed" className="mb-3" />
+                    ) : (
+                      <StatusBadge status="pending" className="mb-3" />
+                    )}
+                    
                     <h3 className="text-2xl font-bold text-gray-900">
                       {nextMeeting.title}
                     </h3>
@@ -197,13 +233,13 @@ function Home() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-gray-600">
                     <div className="flex items-center gap-2">
                       <Calendar className="w-5 h-5 text-indigo-500" />
-                      <span>{formatDate(nextMeeting.start_time)}</span>
+                      <span>{formatDate(nextMeeting.startTime)}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Clock className="w-5 h-5 text-indigo-500" />
                       <span>
-                        {formatTime(nextMeeting.start_time)} -{' '}
-                        {formatTime(nextMeeting.end_time)}
+                        {formatTime(nextMeeting.startTime)} -{' '}
+                        {formatTime(nextMeeting.endTime)}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 sm:col-span-2">
@@ -258,7 +294,7 @@ function Home() {
       {otherMeetings.length > 0 && (
         <section>
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Upcoming Meetings
+            Upcoming Meetings ({otherMeetings.length})
           </h2>
           <div className="grid gap-4">
             {otherMeetings.map((meeting) => (
@@ -268,7 +304,7 @@ function Home() {
                     <div className="flex items-center gap-6">
                       <div className="flex flex-col items-center justify-center w-14 h-14 bg-indigo-50 rounded-lg text-indigo-700 border border-indigo-100">
                         <span className="text-xs font-bold uppercase">
-                          {new Date(meeting.start_time).toLocaleDateString(
+                          {new Date(meeting.startTime).toLocaleDateString(
                             'en-US',
                             {
                               month: 'short',
@@ -276,17 +312,27 @@ function Home() {
                           )}
                         </span>
                         <span className="text-xl font-bold">
-                          {new Date(meeting.start_time).getDate()}
+                          {new Date(meeting.startTime).getDate()}
                         </span>
                       </div>
                       <div>
-                        <h3 className="font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
-                          {meeting.title}
-                        </h3>
-                        <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
+                            {meeting.title}
+                          </h3>
+                          {/* Show status badge - owners are automatically confirmed */}
+                          {meeting.userStatus ? (
+                            <StatusBadge status={meeting.userStatus} />
+                          ) : meeting.ownerId === user?.id ? (
+                            <StatusBadge status="confirmed" />
+                          ) : (
+                            <StatusBadge status="pending" />
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 text-sm text-gray-500">
                           <span className="flex items-center gap-1">
                             <Clock className="w-3.5 h-3.5" />
-                            {formatTime(meeting.start_time)}
+                            {formatTime(meeting.startTime)}
                           </span>
                           <span>•</span>
                           <span className="truncate max-w-[200px]">
@@ -295,24 +341,7 @@ function Home() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="hidden sm:flex -space-x-2">
-                        {meeting.participants.slice(0, 3).map((p, i) => (
-                          <div
-                            key={i}
-                            className="w-8 h-8 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-xs font-medium text-gray-600"
-                          >
-                            {p.name ? p.name.charAt(0) : p.email.charAt(0)}
-                          </div>
-                        ))}
-                        {meeting.participants.length > 3 && (
-                          <div className="w-8 h-8 rounded-full bg-gray-100 border-2 border-white flex items-center justify-center text-xs font-medium text-gray-500">
-                            +{meeting.participants.length - 3}
-                          </div>
-                        )}
-                      </div>
-                      <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-indigo-500 transition-colors" />
-                    </div>
+                    <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-indigo-500 transition-colors" />
                   </CardContent>
                 </Card>
               </Link>

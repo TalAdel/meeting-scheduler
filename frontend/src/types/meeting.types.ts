@@ -17,7 +17,10 @@ export interface Meeting {
   title: string;
   startTime: string; // ISO string from backend
   endTime: string;
-  location: string;
+  location?: string | null;
+  locationCountry?: string | null;  // ISO 3166-1 alpha-2 code (e.g., IL, US, FR)
+  latitude?: number | null;         // Cached latitude
+  longitude?: number | null;        // Cached longitude
   notes?: string | null;
   ownerId: string;
   createdAt: string;
@@ -34,7 +37,10 @@ export interface CreateMeetingData {
   title: string;
   startTime: string;
   endTime: string;
-  location: string;
+  location?: string | null;
+  locationCountry?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   notes?: string;
   emails: string[];
   status?: AttendingStatus;
@@ -44,7 +50,10 @@ export interface UpdateMeetingData {
   title?: string;
   startTime?: string;
   endTime?: string;
-  location?: string;
+  location?: string | null;
+  locationCountry?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   notes?: string;
 }
 

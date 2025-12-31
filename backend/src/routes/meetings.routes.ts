@@ -3,7 +3,7 @@ import MeetingRepository from "../repositories/meeting.repository";
 import pool from "../config/database";
 import MeetingService from "../services/meeting.service";
 import validateRequest from "../middlewares/validate-request";
-import { MeetingValidation, UpdateMeetingValidation, RsvpValidation } from "../middlewares/validate-meeting";
+import { MeetingValidation, UpdateMeetingValidation, statusValidation } from "../middlewares/validate-meeting";
 import authenticate from "../middlewares/auth-request";
 import MeetingUsersRepository from "../repositories/meeting-users.repository";
 import MeetingUserService from "../services/meeting-user.service";
@@ -16,15 +16,26 @@ const userRepository = new UserRepository(pool);
 const meetingService = new MeetingService(meetingRepository, pool);
 const meetingUserService = new MeetingUserService(meetingUsersRepository, meetingService, userRepository);
 
-
 meetingService.setMeetingUserService(meetingUserService);
+
 //create meeting with participants
 router.post('/',
     authenticate,
     [...MeetingValidation], 
     validateRequest,
     async (req: Request, res: Response): Promise<void> => {
-        const { title, startTime, endTime, location, notes, emails, status } = req.body;
+        const { 
+            title, 
+            startTime, 
+            endTime, 
+            location, 
+            locationCountry,
+            latitude,
+            longitude,
+            notes, 
+            emails, 
+            status 
+        } = req.body;
         const ownerId = req.userId!;
         
         const result = await meetingService.createMeetingWithParticipants(
@@ -35,7 +46,10 @@ router.post('/',
             notes,
             ownerId,
             emails,
-            status
+            status,
+            locationCountry,
+            latitude,
+            longitude
         );
 
         res.status(201).json(result);
@@ -88,7 +102,7 @@ router.put('/:id',
     const userUpdates = req.body;
 
     const updatedMeeting = await meetingService.updateMeeting(meetingId, userId, userUpdates);
-    res.status(200).json({ updatedMeeting });
+    res.status(200).json({ meeting: updatedMeeting });
 });
 
 //delete meeting
@@ -102,14 +116,14 @@ router.delete('/:id',
     res.status(200).json({ message: 'Meeting deleted successfully' });
 });
 
-// User updates theirown status
+// User updates their own status
 router.patch('/:meetingId/attend-status',
     authenticate,
-    [...RsvpValidation],
+    [...statusValidation],
     validateRequest,
     async (req: Request, res: Response): Promise<void> => {
-    const { meetingId } = req.params;  // FIXED: was req.params.id
-    const userId = req.userId!;  // From JWT token
+    const { meetingId } = req.params;
+    const userId = req.userId!; 
     const { status } = req.body;
     
     const updated = await meetingUserService.updateMeetingUserStatus(meetingId, userId, status);
@@ -122,7 +136,7 @@ router.patch('/:meetingId/attend-status',
 // Owner/admin updates any participant's status
 router.patch('/:meetingId/participants/:participantId',
     authenticate,
-    [...RsvpValidation],
+    [...statusValidation],
     validateRequest,
     async (req: Request, res: Response): Promise<void> => {
     const { meetingId, participantId } = req.params;

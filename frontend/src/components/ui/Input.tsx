@@ -4,30 +4,11 @@ import { cn } from '../../lib/utils'
 /**
  * Input Component
  * 
- * WHY? A reusable input component that provides:
+ * A reusable input component that provides:
  * - Consistent styling across the app
  * - Built-in label and error message support
  * - Optional icon support for better UX
- * 
- * The Logic Behind forwardRef:
- * - Allows parent components to access the input DOM element
- * - Necessary for form libraries like react-hook-form
- * - Follows React best practices for reusable components
- * 
- * The Logic Behind the structure:
- * - Label is optional but recommended for accessibility
- * - Icon is positioned absolutely for clean layout
- * - Error state changes border color and shows error message
- * - All native input props are preserved (...props)
- * 
- * EXAMPLE Usage:
- * <Input 
- *   label="Email" 
- *   type="email" 
- *   icon={<Mail />} 
- *   error="Invalid email"
- * />
- */
+*/
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string

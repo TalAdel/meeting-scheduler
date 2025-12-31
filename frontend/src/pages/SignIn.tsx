@@ -57,7 +57,8 @@ function SignIn() {
       
       // Handle different error formats from the API
       if (err.response?.data?.errors && Array.isArray(err.response.data.errors)) {
-        const errorMessages = err.response.data.errors.map((e: any) => e.msg).join(', ')
+        // Join errors with newline for better readability
+        const errorMessages = err.response.data.errors.map((e: any) => e.msg).join('\n')
         setError(errorMessages)
       } else if (err.response?.data?.message) {
         setError(err.response.data.message)
@@ -109,21 +110,21 @@ function SignIn() {
 
           {/* Error Display */}
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 whitespace-pre-line">
               {error}
             </div>
           )}
 
           {/* Submit Button */}
           <Button
-            type="submit"
+          type="submit"
             className="w-full"
             size="lg"
             isLoading={isLoading}
-          >
+        >
             Sign In
           </Button>
-        </form>
+      </form>
 
         {/* Sign Up Link */}
         <div className="mt-6 text-center text-sm text-gray-600">
@@ -133,6 +134,16 @@ function SignIn() {
             className="text-indigo-600 font-medium hover:text-indigo-700"
           >
             Sign up
+          </Link>
+        </div>
+
+        {/* Back to Home Link */}
+        <div className="text-center text-sm text-gray-600">
+          <Link
+            to="/"
+            className="text-indigo-600 font-medium hover:text-indigo-700"
+          >
+            ← Back to Home
           </Link>
         </div>
       </div>

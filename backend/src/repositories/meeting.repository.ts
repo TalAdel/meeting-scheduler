@@ -6,24 +6,37 @@ class MeetingRepository{
   constructor(private pool: Pool) {
   }
 
-  /**
-   * Creates a meeting using provided database client
-   * Can be called with pool (standalone) or client (within transaction)
-   */
+
   async createMeeting(
     title: string, 
     startTime: Date, 
     endTime: Date, 
-    location: string, 
+    location: string | null, 
     notes: string | null, 
     ownerId: string,
+    locationCountry?: string | null,
+    latitude?: number | null,
+    longitude?: number | null,
     client?: PoolClient
   ): Promise<Meeting> {
         const dbClient = client || this.pool;
-        const createMeetingQuery = `INSERT INTO meetings (title, start_time, end_time, location, notes, owner_id)
-                                    VALUES ($1, $2, $3, $4, $5, $6)
-                                    RETURNING *`;
-        const result = await dbClient.query<MeetingRow>(createMeetingQuery, [title, startTime, endTime, location, notes || null, ownerId]);
+        const createMeetingQuery = `INSERT INTO meetings (
+          title, start_time, end_time, location, notes, owner_id,
+          location_country, latitude, longitude
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING *`;
+        const result = await dbClient.query<MeetingRow>(createMeetingQuery, [
+          title, 
+          startTime, 
+          endTime, 
+          location || null, 
+          notes || null, 
+          ownerId,
+          locationCountry || null,
+          latitude || null,
+          longitude || null
+        ]);
     
         if(result.rows.length === 0) {
             throw new Error('Failed to create meeting');
@@ -35,8 +48,11 @@ class MeetingRepository{
         title: meeting.title,
         startTime: meeting.start_time,
         endTime: meeting.end_time,
-        location: meeting.location,
-        notes: meeting.notes || undefined,
+        location: meeting.location || null,
+        locationCountry: meeting.location_country || null,
+        latitude: meeting.latitude || null,
+        longitude: meeting.longitude || null,
+        notes: meeting.notes || null,
         ownerId: meeting.owner_id,
         createdAt: meeting.created_at,
         updatedAt: meeting.updated_at,
@@ -44,7 +60,7 @@ class MeetingRepository{
     }
 
     async findMeetingById(id: string): Promise<Meeting | null> {
-        const findMeetingQuery = 'SELECT * FROM meetings WHERE id =$1';
+        const findMeetingQuery = 'SELECT * FROM meetings WHERE id = $1';
 
         const result = await this.pool.query<MeetingRow>(findMeetingQuery, [id]);
 
@@ -58,7 +74,10 @@ class MeetingRepository{
         title: meeting.title,
         startTime: meeting.start_time,
         endTime: meeting.end_time,
-        location: meeting.location,
+        location: meeting.location || null,
+        locationCountry: meeting.location_country || null,
+        latitude: meeting.latitude || null,
+        longitude: meeting.longitude || null,
         notes: meeting.notes || null,
         ownerId: meeting.owner_id,
         createdAt: meeting.created_at,
@@ -68,7 +87,8 @@ class MeetingRepository{
 
     async findMeetingsByOwner(ownerId: string): Promise<Meeting[] | null> {
         const query = `
-          SELECT id, title, start_time, end_time, location, notes, owner_id, created_at, updated_at
+          SELECT id, title, start_time, end_time, location, location_country, 
+                 latitude, longitude, notes, owner_id, created_at, updated_at
           FROM meetings
           WHERE owner_id = $1
           ORDER BY start_time ASC
@@ -85,7 +105,10 @@ class MeetingRepository{
             title: row.title,
             startTime: row.start_time,
             endTime: row.end_time,
-            location: row.location,
+            location: row.location || null,
+            locationCountry: row.location_country || null,
+            latitude: row.latitude || null,
+            longitude: row.longitude || null,
             notes: row.notes || null,
             ownerId: row.owner_id,
             createdAt: row.created_at,
@@ -101,6 +124,7 @@ class MeetingRepository{
     async findAllUserMeetings(userId: string): Promise<any[]> {
         const query = `
           SELECT DISTINCT m.id, m.title, m.start_time, m.end_time, m.location, 
+                 m.location_country, m.latitude, m.longitude,
                  m.notes, m.owner_id, m.created_at, m.updated_at,
                  CASE 
                    WHEN m.owner_id = $1 THEN NULL
@@ -120,7 +144,10 @@ class MeetingRepository{
             title: row.title,
             startTime: row.start_time,
             endTime: row.end_time,
-            location: row.location,
+            location: row.location || null,
+            locationCountry: row.location_country || null,
+            latitude: row.latitude || null,
+            longitude: row.longitude || null,
             notes: row.notes || null,
             ownerId: row.owner_id,
             createdAt: row.created_at,
@@ -130,7 +157,9 @@ class MeetingRepository{
     }
 
     async findMeetingsInRange(startDate: Date, endDate: Date): Promise<Meeting[] | null> {
-        const findMeetingQuery = `SELECT id, title, start_time, end_time, location, notes, owner_id, created_at, updated_at
+        const findMeetingQuery = `SELECT id, title, start_time, end_time, location, 
+                                         location_country, latitude, longitude,
+                                         notes, owner_id, created_at, updated_at
                                   FROM meetings
                                   WHERE start_time >= $1 AND end_time <= $2
                                   ORDER BY start_time ASC`;
@@ -145,7 +174,10 @@ class MeetingRepository{
           title: row.title,
           startTime: row.start_time,
           endTime: row.end_time,
-          location: row.location,
+          location: row.location || null,
+          locationCountry: row.location_country || null,
+          latitude: row.latitude || null,
+          longitude: row.longitude || null,
           notes: row.notes || null,
           ownerId: row.owner_id,
           createdAt: row.created_at,
@@ -155,7 +187,7 @@ class MeetingRepository{
 
 
    async updateMeeting(id: string,
-        updates: Partial<Pick<Meeting, 'title' | 'startTime' | 'endTime' | 'location' | 'notes'>>
+        updates: Partial<Pick<Meeting, 'title' | 'startTime' | 'endTime' | 'location' | 'locationCountry' | 'latitude' | 'longitude' | 'notes'>>
        ): Promise<Meeting> {
 
            const fields: string[] = [];
@@ -182,13 +214,26 @@ class MeetingRepository{
                values.push(updates.location);
            }
 
+           if(updates.locationCountry !== undefined) {
+               fields.push(`location_country = $${paramIndex++}`);
+               values.push(updates.locationCountry);
+           }
+
+           if(updates.latitude !== undefined) {
+               fields.push(`latitude = $${paramIndex++}`);
+               values.push(updates.latitude);
+           }
+
+           if(updates.longitude !== undefined) {
+               fields.push(`longitude = $${paramIndex++}`);
+               values.push(updates.longitude);
+           }
+
            if(updates.notes !== undefined) {
                fields.push(`notes = $${paramIndex++}`);
                values.push(updates.notes);
            }
 
-           // If no fields to update, this shouldn't happen
-           // Service layer should handle this case
            if(fields.length === 0) {
                throw new Error('No fields provided to update');
            }
@@ -203,7 +248,6 @@ class MeetingRepository{
 
            const result = await this.pool.query<MeetingRow>(updateMeetingQuery, values);
 
-           // If UPDATE affected 0 rows, the meeting doesn't exist
            if(result.rows.length === 0) {
                throw new Error(`Meeting with ID ${id} not found`);
            }
@@ -214,7 +258,10 @@ class MeetingRepository{
                title: meeting.title,
                startTime: meeting.start_time,
                endTime: meeting.end_time,
-               location: meeting.location,
+               location: meeting.location || null,
+               locationCountry: meeting.location_country || null,
+               latitude: meeting.latitude || null,
+               longitude: meeting.longitude || null,
                notes: meeting.notes || null,
                ownerId: meeting.owner_id,
                createdAt: meeting.created_at,
@@ -246,6 +293,8 @@ class MeetingRepository{
             return result.rows.map(row => mapRowToMeeting(row));
           }
 
+
+            // Check for conflicts in meetings where user is either:
           async hasConflict(
             userId: string, 
             startTime: Date, 
@@ -254,9 +303,6 @@ class MeetingRepository{
             client?: PoolClient
           ): Promise<boolean> {
             const dbClient = client || this.pool;
-            // Check for conflicts in meetings where user is either:
-            // 1. The owner (owner_id), OR
-            // 2. A participant (in meeting_users table)
             const query = `
               SELECT EXISTS (
                 SELECT 1 FROM meetings m

@@ -70,8 +70,8 @@ function Landing() {
                   variant="outline"
                   size="lg"
                   className="w-full sm:w-auto text-lg px-8"
-                >
-                  Sign In
+            >
+              Sign In
                 </Button>
               </Link>
             </div>

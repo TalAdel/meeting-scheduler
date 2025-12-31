@@ -4,37 +4,11 @@ import { useAuth } from '../../context/AuthContext'
 import { Sidebar } from '../Sidebar'
 import { Menu } from 'lucide-react'
 
-/**
- * AuthLayout Component
- * 
- * WHY? Provides consistent layout for all authenticated pages
- * 
- * The Logic Behind the structure:
- * 1. Checks authentication before rendering
- * 2. Redirects to sign-in if not authenticated
- * 3. Shows sidebar on desktop
- * 4. Shows mobile menu button on small screens
- * 5. Uses Outlet for nested route content
- * 
- * Layout Structure:
- * - Sidebar (fixed, left): Navigation
- * - Main content (flexible): Page content with proper spacing
- * - Mobile header: Shows on small screens with menu button
- * 
- * Responsive Design:
- * - Desktop (md+): Sidebar visible, content offset
- * - Mobile: Sidebar hidden, mobile header visible
- * 
- * SOLID Principles:
- * - Single Responsibility: Only handles auth layout structure
- * - Open/Closed: Accepts any child components via Outlet
- */
 
 export function AuthLayout() {
   const { isAuthenticated } = useAuth()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
-  // Redirect to sign-in if not authenticated
   if (!isAuthenticated) {
     return <Navigate to="/signin" replace />
   }

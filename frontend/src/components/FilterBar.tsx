@@ -2,42 +2,18 @@ import { useEffect, useState, useRef } from 'react'
 import { Button } from './ui/Button'
 import { cn } from '../lib/utils'
 import { Filter, ChevronDown, Calendar, User, X, Check } from 'lucide-react'
+import type { AttendingStatus } from '../types/meeting.types'
 
-/**
- * FilterBar Component
- * 
- * WHY? Allows users to filter meetings by multiple criteria
- * 
- * Filter Options:
- * 1. Status: pending, confirmed, declined
- * 2. Date Range: all, today, week, month, custom
- * 3. Ownership: my meetings only vs all meetings
- * 
- * The Logic Behind the UX:
- * 1. Dropdowns for complex filters (status, date)
- * 2. Toggle button for simple filters (my meetings)
- * 3. Active filter count shows at a glance
- * 4. Clear all button for quick reset
- * 5. Visual feedback on active filters (colored background)
- * 
- * State Management:
- * - Local state for UI (dropdowns open/closed)
- * - Parent callback for filter changes
- * - Click outside to close dropdowns
- * 
- * SOLID Principles:
- * - Single Responsibility: Only handles filter UI
- * - Dependency Inversion: Notifies parent via callback
- */
 
-type AttendingStatus = 'pending' | 'confirmed' | 'declined'
+
+type FilterAttendingStatus = Exclude<AttendingStatus, 'attended'>
 
 interface FilterBarProps {
   onFilterChange: (filters: FilterState) => void
 }
 
 export interface FilterState {
-  statuses: AttendingStatus[]
+  statuses: FilterAttendingStatus[]
   dateRange: 'all' | 'today' | 'week' | 'month' | 'custom'
   customDateRange?: {
     start: string
@@ -62,7 +38,7 @@ export function FilterBar({ onFilterChange }: FilterBarProps) {
   const dateRef = useRef<HTMLDivElement>(null)
 
   const statusOptions: {
-    value: AttendingStatus
+    value: FilterAttendingStatus
     label: string
   }[] = [
     { value: 'confirmed', label: 'Confirmed' },
@@ -100,7 +76,7 @@ export function FilterBar({ onFilterChange }: FilterBarProps) {
     onFilterChange(filters)
   }, [filters, onFilterChange])
 
-  const toggleStatus = (status: AttendingStatus) => {
+  const toggleStatus = (status: FilterAttendingStatus) => {
     setFilters((prev) => ({
       ...prev,
       statuses: prev.statuses.includes(status)

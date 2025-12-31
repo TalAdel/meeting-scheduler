@@ -1,31 +1,7 @@
 import { useEffect } from 'react'
 import { X } from 'lucide-react'
-import { cn } from '../../lib/utils'
 import { Button } from './Button'
 
-/**
- * Modal Component
- * 
- * WHY? Reusable modal/dialog for confirmations and forms
- * 
- * The Logic Behind the UX:
- * 1. Backdrop click closes modal (expected behavior)
- * 2. Escape key closes modal (accessibility)
- * 3. Body scroll is locked when modal is open (prevents confusion)
- * 4. Smooth animations for better UX
- * 5. Optional confirmation buttons for dialogs
- * 
- * Features:
- * - Backdrop overlay with blur effect
- * - Centered, responsive modal
- * - Close button in header
- * - Optional footer with action buttons
- * - Children slot for custom content
- * 
- * SOLID Principles:
- * - Single Responsibility: Only handles modal UI
- * - Open/Closed: Accepts children for flexible content
- */
 
 interface ModalProps {
   isOpen: boolean

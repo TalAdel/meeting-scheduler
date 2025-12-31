@@ -8,20 +8,42 @@ import cors from "cors";
 
 const app = express();
 
-// Enable CORS for frontend
+/**
+ * CORS Configuration - Supports Multiple Origins
+ * 
+ * WHY? We want to support:
+ * 1. Local development (http://localhost:5173)
+ * 2. Production/Cloud (http://167.99.250.33:5173 or your domain)
+ * 
+ * The Logic:
+ * - If FRONTEND_URL is a comma-separated list, split it into array
+ * - Allow requests from ANY of these origins
+ * - Fallback to localhost for local development
+ */
+const allowedOrigins = process.env.FRONTEND_URL 
+  ? process.env.FRONTEND_URL.split(',').map(url => url.trim())
+  : ['http://localhost:5173'];
+
+console.log('Allowed CORS origins:', allowedOrigins);
+
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl)
+        if (!origin) return callback(null, true);
+        
+        // Check if origin is in allowed list
+        if (allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            console.warn(`CORS blocked request from: ${origin}`);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true,
 }));
 
 
 app.use(express.json());
-
-console.log('=== APP.TS DEBUG ===');
-console.log('authRoutes type:', typeof authRoutes);
-console.log('authRoutes value:', authRoutes);
-console.log('Is authRoutes a function?', typeof authRoutes === 'function');
-console.log('====================');
 
 app.get('/health', (_req: Request, res: Response) => {
     res.status(200).send('OK');

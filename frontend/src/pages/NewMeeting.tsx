@@ -4,7 +4,6 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card, CardContent, CardHeader } from '../components/ui/Card'
 import {
-  Plus,
   X,
   Calendar,
   Clock,
@@ -12,43 +11,25 @@ import {
   FileText,
   UserPlus,
 } from 'lucide-react'
+import { createMeeting } from '../services/meeting.api'
+import type { CreateMeetingData } from '../types/meeting.types'
 
 /**
- * NewMeetingPage Component
+ * NewMeetingPage - NOW CONNECTED TO BACKEND!
  * 
- * WHY? Comprehensive form for creating meetings
- * 
- * The Logic Behind the UX:
- * 1. Grouped form fields (Details, Participants) reduce overwhelm
- * 2. Icons provide visual context for each field
- * 3. Dynamic participant list shows added emails
- * 4. Loading state prevents double submissions
- * 5. Cancel button provides escape route
- * 
- * Form Structure:
- * - Meeting Details: title, start/end time, location, notes
- * - Participants: dynamic list of email addresses
- * 
- * State Management:
- * - Form fields in local state
- * - Participants array managed separately
- * - Loading state for async operations
- * 
- * Validation:
- * - Required fields enforced by HTML5
- * - Email validation automatic
- * - End time must be after start time (HTML5 min attribute)
+ * Backend Integration:
+ * - POST /api/v1/meetings - Creates meeting with participants
+ * - Validates all fields on backend
+ * - Automatically invites participants
  */
-
-interface Participant {
-  email: string
-  status: 'pending'
-}
 
 function NewMeeting() {
   const navigate = useNavigate()
   const [isLoading, setIsLoading] = useState(false)
-  const [participants, setParticipants] = useState<Participant[]>([])
+  const [error, setError] = useState<string>('')
+  
+  // Participant emails
+  const [participants, setParticipants] = useState<string[]>([])
   const [newParticipantEmail, setNewParticipantEmail] = useState('')
 
   // Form fields
@@ -60,44 +41,86 @@ function NewMeeting() {
 
   const handleAddParticipant = (e: React.FormEvent) => {
     e.preventDefault()
-    if (
-      newParticipantEmail &&
-      !participants.find((p) => p.email === newParticipantEmail)
-    ) {
-      setParticipants([
-        ...participants,
-        {
-          email: newParticipantEmail,
-          status: 'pending',
-        },
-      ])
-      setNewParticipantEmail('')
+    
+    // Validation
+    if (!newParticipantEmail) return
+    if (participants.includes(newParticipantEmail)) {
+      alert('This email is already added')
+      return
     }
+    
+    // Add to list
+    setParticipants([...participants, newParticipantEmail])
+    setNewParticipantEmail('')
   }
 
   const removeParticipant = (email: string) => {
-    setParticipants(participants.filter((p) => p.email !== email))
+    setParticipants(participants.filter((p) => p !== email))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError('')
     setIsLoading(true)
 
-    // TODO: Replace with actual API call
-    console.log('Creating meeting:', {
-      title,
-      startTime,
-      endTime,
-      location,
-      notes,
-      participants,
-    })
+    try {
+      // Client-side validation
+      const startDate = new Date(startTime)
+      const endDate = new Date(endTime)
+      
+      // Check if end time is after start time
+      if (endDate <= startDate) {
+        setError('End time must be after start time')
+        setIsLoading(false)
+        return
+      }
+      
+      // Check meeting duration (max 8 hours)
+      const durationMs = endDate.getTime() - startDate.getTime()
+      const durationHours = durationMs / (1000 * 60 * 60)
+      if (durationHours > 8) {
+        setError('Meeting cannot be longer than 8 hours')
+        setIsLoading(false)
+        return
+      }
+      
+      // Prepare data for backend
+      const meetingData: CreateMeetingData = {
+        title,
+        startTime, // Backend expects ISO string
+        endTime,
+        location,
+        notes: notes || undefined,
+        emails: participants, // List of participant emails
+        status: 'pending', // Default status for new participants
+      }
 
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false)
+      console.log('Creating meeting:', meetingData)
+      
+      // Create meeting via API
+      const result = await createMeeting(meetingData)
+      
+      console.log('Meeting created:', result)
+      
+      // Success! Redirect to home
       navigate('/home')
-    }, 1000)
+    } catch (err: any) {
+      console.error('Error creating meeting:', err)
+      
+      // Handle validation errors
+      if (err.response?.data?.errors && Array.isArray(err.response.data.errors)) {
+        const errorMessages = err.response.data.errors
+          .map((e: any) => e.msg)
+          .join('\n')
+        setError(errorMessages)
+      } else if (err.response?.data?.message) {
+        setError(err.response.data.message)
+      } else {
+        setError('Failed to create meeting. Please try again.')
+      }
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -150,14 +173,16 @@ function NewMeeting() {
             </div>
 
             <Input
-              label="Location"
-              placeholder="e.g., Conference Room A or Zoom Link"
+              label="Location (Optional)"
+              placeholder="e.g., Tour Eiffel, Paris or דיזנגוף 50, תל אביב or Conference Room A"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              required
-              maxLength={255}
+              maxLength={500}
               icon={<MapPin className="w-4 h-4" />}
             />
+            <p className="text-xs text-gray-500 mt-1 ml-1">
+              Supports addresses worldwide in any language. Leave empty for virtual meetings.
+            </p>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -213,22 +238,22 @@ function NewMeeting() {
 
             {participants.length > 0 ? (
               <div className="space-y-2">
-                {participants.map((p) => (
+                {participants.map((email) => (
                   <div
-                    key={p.email}
+                    key={email}
                     className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100"
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold text-xs">
-                        {p.email.charAt(0).toUpperCase()}
+                        {email.charAt(0).toUpperCase()}
                       </div>
                       <span className="text-sm font-medium text-gray-700">
-                        {p.email}
+                        {email}
                       </span>
                     </div>
                     <button
                       type="button"
-                      onClick={() => removeParticipant(p.email)}
+                      onClick={() => removeParticipant(email)}
                       className="text-gray-400 hover:text-red-500 transition-colors"
                     >
                       <X className="w-4 h-4" />
@@ -244,12 +269,20 @@ function NewMeeting() {
           </CardContent>
         </Card>
 
+        {/* Error Display */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 whitespace-pre-line">
+            {error}
+          </div>
+        )}
+
         {/* Action Buttons */}
         <div className="flex items-center justify-end gap-4">
           <Button
             type="button"
             variant="ghost"
             onClick={() => navigate('/home')}
+            disabled={isLoading}
           >
             Cancel
           </Button>

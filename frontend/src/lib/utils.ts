@@ -21,9 +21,7 @@ export function cn(...inputs: ClassValue[]) {
 
 /**
  * formatDate - Formats ISO date string to readable format
- * 
- * WHY? Consistent date formatting across the app
- * 
+
  * EXAMPLE INPUT: "2024-12-30T10:00:00.000Z"
  * EXAMPLE OUTPUT: "Sat, Dec 30, 2024"
  */
@@ -37,27 +35,26 @@ export function formatDate(dateString: string) {
 }
 
 /**
- * formatTime - Formats ISO date string to readable time
- * 
- * WHY? Consistent time formatting across the app
- * 
- * EXAMPLE INPUT: "2024-12-30T10:30:00.000Z"
- * EXAMPLE OUTPUT: "10:30 AM"
+ * formatTime - Formats ISO date string to 24-hour time format with AM/PM
+ * EXAMPLE INPUT: "2024-12-30T19:30:00.000Z"
+ * EXAMPLE OUTPUT: "19:30 PM"
  */
 export function formatTime(dateString: string) {
-  return new Date(dateString).toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  })
+  const date = new Date(dateString)
+  const hours = date.getHours()
+  const minutes = date.getMinutes()
+  
+  // Format to 2 digits
+  const hoursStr = hours.toString().padStart(2, '0')
+  const minutesStr = minutes.toString().padStart(2, '0')
+  
+  // Determine AM/PM
+  const period = hours >= 12 ? 'PM' : 'AM'
+  
+  return `${hoursStr}:${minutesStr} ${period}`
 }
 
 /**
- * getStatusColor - Returns Tailwind classes for status badges
- * 
- * WHY? DRY principle - centralize status color logic
- * This ensures consistent styling for status badges across the app
- * 
- * The Logic Behind:
  * - Each status has specific colors for background, text, and border
  * - Using Tailwind utility classes for easy maintenance
  * - Follows a color-coded convention: green=good, red=bad, yellow=pending, blue=attended

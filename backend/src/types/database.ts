@@ -23,7 +23,10 @@ export interface MeetingRow {
   title: string;
   start_time: Date;
   end_time: Date;
-  location: string;
+  location: string | null;
+  location_country: string | null;
+  latitude: number | null;
+  longitude: number | null;
   notes: string | null;
   owner_id: string;
   created_at: Date;
@@ -55,7 +58,10 @@ export function mapRowToMeeting(row: MeetingRow): Meeting {
     title: row.title,
     startTime: row.start_time,
     endTime: row.end_time,
-    location: row.location,
+    location: row.location || null,
+    locationCountry: row.location_country || null,
+    latitude: row.latitude || null,
+    longitude: row.longitude || null,
     notes: row.notes,
     ownerId: row.owner_id,
     createdAt: row.created_at,

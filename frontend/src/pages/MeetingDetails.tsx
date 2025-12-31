@@ -1,7 +1,9 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader } from '../components/ui/Card'
+import { Input } from '../components/ui/Input'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import { formatDate, formatTime, cn } from '../lib/utils'
 import {
@@ -13,81 +15,268 @@ import {
   XCircle,
   HelpCircle,
   ChevronDown,
+  Edit2,
+  Trash2,
+  X,
 } from 'lucide-react'
+import { getMeetingById, getMeetingParticipants, updateAttendanceStatus, updateMeeting, deleteMeeting } from '../services/meeting.api'
+import { getUserById } from '../services/user.api'
+import type { Meeting, AttendingStatus, UpdateMeetingData } from '../types/meeting.types'
+import MeetingMap from '../components/MeetingMap'
 
 /**
- * MeetingDetailsPage Component
+ * MeetingDetailsPage - NOW CONNECTED TO BACKEND!
  * 
- * WHY? Shows complete meeting information with RSVP functionality
- * 
- * The Logic Behind the UX:
- * 1. Large title and date draw attention to key info
- * 2. Status dropdown allows easy RSVP changes
- * 3. Map embed shows location visually
- * 4. Participant list shows attendance status
- * 5. Organizer info provides contact context
- * 
- * RSVP Flow:
- * - Pending: Show Accept/Decline buttons
- * - Confirmed/Declined: Show status with dropdown to change
- * - Dropdown allows status change at any time
- * 
- * State Management:
- * - userStatus: current user's RSVP status
- * - isDropdownOpen: dropdown visibility
- * - Mock data for now (will fetch from API)
+ * Backend Integration:
+ * - GET /api/v1/meetings/:id - Fetch meeting details
+ * - GET /api/v1/meetings/:id/participants - Fetch participants
+ * - PATCH /api/v1/meetings/:id/attend-status - Update user's RSVP
  */
 
-type AttendingStatus = 'pending' | 'confirmed' | 'declined' | 'attended'
-
-// Mock meeting data
-const mockMeeting = {
-  id: 'm-1',
-  title: 'Q4 Product Roadmap Review',
-  start_time: new Date(Date.now() + 86400000).toISOString(),
-  end_time: new Date(Date.now() + 90000000).toISOString(),
-  location: 'Conference Room A',
-  notes:
-    'Reviewing the upcoming features for Q4. Please bring your status reports.',
-  owner_id: 'user-1',
-  participants: [
-    { email: 'sarah@example.com', status: 'confirmed' as const, name: 'Sarah Jones' },
-    { email: 'mike@example.com', status: 'pending' as const, name: 'Mike Chen' },
-    { email: 'alex.morgan@example.com', status: 'pending' as const, name: 'Alex Morgan' },
-  ],
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
+interface Participant {
+  userId: string
+  fullName: string
+  email: string
+  status: AttendingStatus
 }
 
-const mockUser = {
-  email: 'alex.morgan@example.com',
+interface Organizer {
+  userId: string
+  fullName: string
+  email: string
 }
 
 function MeetingDetails() {
   const { id: meetingId } = useParams()
   const navigate = useNavigate()
-  const [userStatus, setUserStatus] = useState<AttendingStatus>('pending')
+  const { user } = useAuth()
+  
+  // State
+  const [meeting, setMeeting] = useState<Meeting | null>(null)
+  const [participants, setParticipants] = useState<Participant[]>([])
+  const [organizer, setOrganizer] = useState<Organizer | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string>('')
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   
-  // Use meetingId for future API calls
-  console.log('Meeting ID:', meetingId)
+  // Edit mode state
+  const [isEditing, setIsEditing] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
+  const [editError, setEditError] = useState<string>('')
+  const [formData, setFormData] = useState({
+    title: '',
+    location: '',
+    startTime: '',
+    endTime: '',
+    notes: '',
+  })
 
-  // Initialize user status from meeting data
+  // Fetch meeting data
   useEffect(() => {
-    const participant = mockMeeting.participants.find(
-      (p) => p.email === mockUser.email,
-    )
-    if (participant) {
-      setUserStatus(participant.status)
+    const fetchMeetingData = async () => {
+      if (!meetingId) return
+      
+      try {
+        setIsLoading(true)
+        setError('')
+        
+        // Fetch meeting details and participants
+        const [meetingData, participantsData] = await Promise.all([
+          getMeetingById(meetingId),
+          getMeetingParticipants(meetingId)
+        ])
+        
+        setMeeting(meetingData)
+        setParticipants(participantsData)
+        
+        // Always fetch organizer information from the backend using ownerId
+        try {
+          const ownerData = await getUserById(meetingData.ownerId)
+          setOrganizer({
+            userId: ownerData.id,
+            fullName: ownerData.fullName,
+            email: ownerData.email
+          })
+        } catch (ownerErr) {
+          console.error('Error fetching organizer:', ownerErr)
+          // Fallback: try to find owner in participants list
+          const ownerInfo = participantsData.find(p => p.userId === meetingData.ownerId)
+          if (ownerInfo) {
+            setOrganizer({
+              userId: ownerInfo.userId,
+              fullName: ownerInfo.fullName,
+              email: ownerInfo.email
+            })
+          } else if (user?.id === meetingData.ownerId) {
+            // Last resort: use current user's info if they're the owner
+            setOrganizer({
+              userId: user.id,
+              fullName: user.fullName,
+              email: user.email
+            })
+          }
+        }
+      } catch (err: any) {
+        console.error('Error fetching meeting:', err)
+        setError(err.response?.data?.message || 'Failed to load meeting details')
+      } finally {
+        setIsLoading(false)
+      }
     }
-  }, [])
 
-  const handleStatusChange = (status: AttendingStatus) => {
-    setUserStatus(status)
-    // TODO: Call API to update status
-    console.log('Updating status to:', status)
-    setIsDropdownOpen(false)
+    fetchMeetingData()
+  }, [meetingId, user])
+
+  const handleStatusChange = async (status: AttendingStatus) => {
+    if (!meetingId || !meeting) return
+
+    try {
+      setIsUpdatingStatus(true)
+      await updateAttendanceStatus(meetingId, status)
+      
+      // Update local state
+      setMeeting({ ...meeting, userStatus: status })
+      
+      // Update participant list
+      if (user) {
+        setParticipants(participants.map(p =>
+          p.userId === user.id ? { ...p, status } : p
+        ))
+      }
+      
+      setIsDropdownOpen(false)
+    } catch (err: any) {
+      console.error('Error updating status:', err)
+      alert(err.response?.data?.message || 'Failed to update status')
+    } finally {
+      setIsUpdatingStatus(false)
+    }
+  }
+
+  const handleEdit = () => {
+    if (!meeting) return
+    
+    // Convert ISO strings to datetime-local format
+    const formatDateTimeForInput = (isoString: string) => {
+      const date = new Date(isoString)
+      return date.toISOString().slice(0, 16) // Format: YYYY-MM-DDTHH:mm
+    }
+    
+    setFormData({
+      title: meeting.title,
+      location: meeting.location || '',
+      startTime: formatDateTimeForInput(meeting.startTime),
+      endTime: formatDateTimeForInput(meeting.endTime),
+      notes: meeting.notes || '',
+    })
+    setIsEditing(true)
+    setEditError('')
+  }
+
+  const handleCancel = () => {
+    setIsEditing(false)
+    setEditError('')
+  }
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!meetingId || !meeting) return
+
+    setEditError('')
+    setIsSaving(true)
+    setShowSuccess(false)
+
+    try {
+      // Client-side validation
+      const startDate = new Date(formData.startTime)
+      const endDate = new Date(formData.endTime)
+      
+      if (endDate <= startDate) {
+        setEditError('End time must be after start time')
+        setIsSaving(false)
+        return
+      }
+      
+      // Check meeting duration (max 8 hours)
+      const durationMs = endDate.getTime() - startDate.getTime()
+      const durationHours = durationMs / (1000 * 60 * 60)
+      if (durationHours > 8) {
+        setEditError('Meeting cannot be longer than 8 hours')
+        setIsSaving(false)
+        return
+      }
+      
+      // Allow editing meetings that are happening soon (within next hour for timezone tolerance)
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
+      if (startDate < oneHourAgo) {
+        setEditError('Cannot update meetings that started more than 1 hour ago')
+        setIsSaving(false)
+        return
+      }
+      
+      // Prepare updates - send all fields to backend
+      const updates: UpdateMeetingData = {
+        title: formData.title,
+        location: formData.location,
+        // Convert datetime-local format to ISO string for backend
+        startTime: startDate.toISOString(),
+        endTime: endDate.toISOString(),
+        notes: formData.notes || undefined,
+      }
+
+      console.log('Sending updates to backend:', updates)
+      const updatedMeeting = await updateMeeting(meetingId, updates)
+      setMeeting(updatedMeeting)
+      setIsEditing(false)
+      setShowSuccess(true)
+
+      // Hide success message after 3 seconds
+      setTimeout(() => {
+        setShowSuccess(false)
+      }, 3000)
+    } catch (err: any) {
+      console.error('Error updating meeting:', err)
+      console.error('Error response:', err.response?.data)
+      
+      if (err.response?.data?.errors && Array.isArray(err.response.data.errors)) {
+        const errorMessages = err.response.data.errors
+          .map((e: any) => {
+            const field = e.path || e.param || e.field || 'unknown'
+            const msg = e.msg || e.message || 'validation error'
+            return `${field}: ${msg}`
+          })
+          .join('\n')
+        setEditError(errorMessages)
+      } else if (err.response?.data?.message) {
+        setEditError(err.response.data.message)
+      } else {
+        setEditError('Failed to update meeting. Please check your input and try again.')
+      }
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!meetingId || !meeting) return
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${meeting.title}"?\n\nThis action cannot be undone and will remove the meeting for all participants.`
+    )
+
+    if (!confirmed) return
+
+    try {
+      await deleteMeeting(meetingId)
+      alert('Meeting deleted successfully')
+      navigate('/home')
+    } catch (err: any) {
+      console.error('Error deleting meeting:', err)
+      alert(err.response?.data?.message || 'Failed to delete meeting')
+    }
   }
 
   // Close dropdown when clicking outside
@@ -132,187 +321,316 @@ function MeetingDetails() {
     }
   }
 
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading meeting...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error || !meeting) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <Button
+          variant="ghost"
+          className="pl-0 hover:bg-transparent hover:text-indigo-600 mb-4"
+          onClick={() => navigate('/home')}
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to Meetings
+        </Button>
+        <Card>
+          <CardContent className="p-12 text-center">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Calendar className="w-6 h-6 text-red-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              {error || 'Meeting not found'}
+            </h3>
+            <Button onClick={() => navigate('/home')}>
+              Back to Home
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const userStatus = meeting.userStatus || 'pending'
+  const isOwner = user?.id === meeting.ownerId
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <Button
-        variant="ghost"
-        className="pl-0 hover:bg-transparent hover:text-indigo-600"
+      <div className="flex items-center justify-between">
+        <Button
+          variant="ghost"
+          className="pl-0 hover:bg-transparent hover:text-indigo-600"
           onClick={() => navigate('/home')}
-      >
-        <ArrowLeft className="w-4 h-4 mr-2" />
-        Back to Meetings
-      </Button>
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to Meetings
+        </Button>
+        
+        {/* Owner Actions */}
+        {isOwner && !isEditing && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleEdit}>
+              <Edit2 className="w-4 h-4 mr-2" />
+              Edit Meeting
+            </Button>
+            <Button variant="outline" onClick={handleDelete} className="text-red-600 hover:text-red-700 hover:bg-red-50">
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Success Message */}
+      {showSuccess && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+          <CheckCircle className="w-5 h-5 text-green-600" />
+          <p className="text-sm font-medium text-green-800">
+            Meeting updated successfully!
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
-            <div>
+        <div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            {mockMeeting.title}
-              </h1>
+            {meeting.title}
+          </h1>
           <div className="flex flex-wrap gap-4 text-gray-600">
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-indigo-500" />
-              <span>{formatDate(mockMeeting.start_time)}</span>
+              <span>{formatDate(meeting.startTime)}</span>
             </div>
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-indigo-500" />
               <span>
-                {formatTime(mockMeeting.start_time)} -{' '}
-                {formatTime(mockMeeting.end_time)}
-                </span>
+                {formatTime(meeting.startTime)} -{' '}
+                {formatTime(meeting.endTime)}
+              </span>
             </div>
-              </div>
-            </div>
+          </div>
+        </div>
 
-        {/* Status Actions */}
-        <div
-          className="flex items-center gap-2 bg-white p-2 rounded-lg shadow-sm border border-gray-200 relative"
-          ref={dropdownRef}
-        >
-          {userStatus === 'pending' ? (
-            <>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => handleStatusChange('confirmed')}
-                className="bg-green-600 hover:bg-green-700"
-                  >
-                    Accept
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleStatusChange('declined')}
-                className="text-red-600 hover:bg-red-50 border-red-200"
-              >
-                Decline
-              </Button>
-            </>
-          ) : (
-            <div className="relative">
-              <div className="flex items-center gap-2">
-                <div
-                  className={cn(
-                    'flex items-center gap-2 px-3 py-1.5 rounded-md font-medium text-sm border',
-                    userStatus === 'confirmed'
-                      ? 'bg-green-50 text-green-700 border-green-200'
-                      : userStatus === 'declined'
-                        ? 'bg-red-50 text-red-700 border-red-200'
-                        : 'bg-yellow-50 text-yellow-700 border-yellow-200',
-                  )}
-                >
-                  {getStatusIcon(userStatus)}
-                  {getStatusLabel(userStatus)}
-                </div>
+        {/* Status Actions - Only show for participants, not owner */}
+        {!isOwner && !isEditing && (
+          <div
+            className="flex items-center gap-2 bg-white p-2 rounded-lg shadow-sm border border-gray-200 relative"
+            ref={dropdownRef}
+          >
+            {userStatus === 'pending' ? (
+              <>
                 <Button
-                  variant="ghost"
+                  variant="primary"
                   size="sm"
-                  className="h-9 w-9 p-0 rounded-full hover:bg-gray-100"
-                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  onClick={() => handleStatusChange('confirmed')}
+                  disabled={isUpdatingStatus}
+                  className="bg-green-600 hover:bg-green-700"
                 >
-                  <ChevronDown
-                    className={cn(
-                      'w-4 h-4 transition-transform',
-                      isDropdownOpen && 'rotate-180',
-                    )}
-                  />
+                  Accept
                 </Button>
-              </div>
-
-              {/* Dropdown Menu */}
-              {isDropdownOpen && (
-                <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-10 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Change Status
-                  </div>
-
-                  <button
-                    onClick={() => handleStatusChange('confirmed')}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleStatusChange('declined')}
+                  disabled={isUpdatingStatus}
+                  className="text-red-600 hover:bg-red-50 border-red-200"
+                >
+                  Decline
+                </Button>
+              </>
+            ) : (
+              <div className="relative">
+                <div className="flex items-center gap-2">
+                  <div
                     className={cn(
-                      'w-full text-left px-4 py-2 text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors',
+                      'flex items-center gap-2 px-3 py-1.5 rounded-md font-medium text-sm border',
                       userStatus === 'confirmed'
-                        ? 'text-green-700 bg-green-50/50'
-                        : 'text-gray-700',
+                        ? 'bg-green-50 text-green-700 border-green-200'
+                        : 'bg-red-50 text-red-700 border-red-200',
                     )}
                   >
-                    <CheckCircle className="w-4 h-4" />
-                    Attending
-                    {userStatus === 'confirmed' && (
-                      <span className="ml-auto text-green-600 text-xs font-medium">
-                        Current
-                      </span>
-                    )}
-                  </button>
-
-                  <button
-                    onClick={() => handleStatusChange('pending')}
-                    className={cn(
-                      'w-full text-left px-4 py-2 text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors',
-                      'text-gray-700',
-                    )}
-                  >
-                    <HelpCircle className="w-4 h-4" />
-                    Maybe
-                  </button>
-
-                  <button
-                    onClick={() => handleStatusChange('declined')}
-                    className={cn(
-                      'w-full text-left px-4 py-2 text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors',
-                      userStatus === 'declined'
-                        ? 'text-red-700 bg-red-50/50'
-                        : 'text-gray-700',
-                    )}
-                  >
-                    <XCircle className="w-4 h-4" />
-                    Declined
-                    {userStatus === 'declined' && (
-                      <span className="ml-auto text-red-600 text-xs font-medium">
-                        Current
-                      </span>
-                    )}
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-        </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Main Content */}
-        <div className="md:col-span-2 space-y-6">
-          <Card>
-            <CardHeader>
-              <h2 className="text-lg font-semibold text-gray-900">Details</h2>
-            </CardHeader>
-            <CardContent className="space-y-6">
-          <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-2">
-                  Location
-                </h3>
-                <div className="flex items-center gap-2 text-gray-900 mb-4">
-                  <MapPin className="w-5 h-5 text-gray-400" />
-                  {mockMeeting.location}
-                </div>
-                {/* Map Placeholder */}
-                <div className="w-full h-64 bg-gray-100 rounded-lg overflow-hidden border border-gray-200 flex items-center justify-center">
-                  <div className="text-center text-gray-500">
-                    <MapPin className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">Map view would appear here</p>
+                    {getStatusIcon(userStatus)}
+                    {getStatusLabel(userStatus)}
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 w-9 p-0 rounded-full hover:bg-gray-100"
+                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                    disabled={isUpdatingStatus}
+                  >
+                    <ChevronDown
+                      className={cn(
+                        'w-4 h-4 transition-transform',
+                        isDropdownOpen && 'rotate-180',
+                      )}
+                    />
+                  </Button>
                 </div>
-              </div>
 
-                <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-2">
-                    Notes
-                  </h3>
-                <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
-                  {mockMeeting.notes}
-                  </p>
-                </div>
-            </CardContent>
-          </Card>
+                {/* Dropdown Menu */}
+                {isDropdownOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-10 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                      Change Status
+                    </div>
+
+                    <button
+                      onClick={() => handleStatusChange('confirmed')}
+                      className="w-full text-left px-4 py-2 text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors text-gray-700"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Attending
+                    </button>
+
+                    <button
+                      onClick={() => handleStatusChange('declined')}
+                      className="w-full text-left px-4 py-2 text-sm flex items-center gap-2 hover:bg-gray-50 transition-colors text-gray-700"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      Declined
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <form onSubmit={handleSave}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Main Content */}
+          <div className="md:col-span-2 space-y-6">
+            <Card>
+              <CardHeader>
+                <h2 className="text-lg font-semibold text-gray-900">Details</h2>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Edit Mode */}
+                {isEditing && isOwner ? (
+                  <>
+                    <Input
+                      label="Title"
+                      value={formData.title}
+                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      required
+                    />
+                    
+                    <Input
+                      label="Location"
+                      value={formData.location}
+                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                      icon={<MapPin className="w-4 h-4" />}
+                      required
+                    />
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Input
+                        label="Start Time"
+                        type="datetime-local"
+                        value={formData.startTime}
+                        onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                        icon={<Clock className="w-4 h-4" />}
+                        required
+                      />
+                      <Input
+                        label="End Time"
+                        type="datetime-local"
+                        value={formData.endTime}
+                        onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                        icon={<Clock className="w-4 h-4" />}
+                        required
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                        Notes (Optional)
+                      </label>
+                      <textarea
+                        className="w-full min-h-[120px] rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
+                        value={formData.notes}
+                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                        placeholder="Add any additional details about the meeting..."
+                      />
+                    </div>
+
+                    {/* Error Display */}
+                    {editError && (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 whitespace-pre-line">
+                        {editError}
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="pt-4 flex items-center justify-end gap-3 border-t border-gray-200">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={handleCancel}
+                        disabled={isSaving}
+                      >
+                        <X className="w-4 h-4 mr-2" />
+                        Cancel
+                      </Button>
+                      <Button type="submit" isLoading={isSaving}>
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Save Changes
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  /* View Mode */
+                  <>
+                    {meeting.location && (
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 mb-2">
+                          Location
+                        </h3>
+                        <div className="flex items-center gap-2 text-gray-900 mb-4">
+                          <MapPin className="w-5 h-5 text-gray-400" />
+                          {meeting.location}
+                        </div>
+                        
+                        {/* Google Maps - Worldwide Support */}
+                        <div className="mt-4">
+                          <MeetingMap 
+                            location={meeting.location}
+                            locationCountry={meeting.locationCountry || undefined}
+                            latitude={meeting.latitude || undefined}
+                            longitude={meeting.longitude || undefined}
+                            onError={(error) => console.error('Map error:', error)}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {meeting.notes && (
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 mb-2">
+                          Notes
+                        </h3>
+                        <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+                          {meeting.notes}
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
         {/* Sidebar Info */}
@@ -320,53 +638,60 @@ function MeetingDetails() {
           <Card>
             <CardHeader>
               <h2 className="text-lg font-semibold text-gray-900">
-                Participants
+                Participants ({participants.length})
               </h2>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {mockMeeting.participants.map((p, i) => (
-                  <div key={i} className="flex items-center justify-between">
+                {participants.map((p) => (
+                  <div key={p.userId} className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-xs font-medium text-gray-600">
-                        {p.name ? p.name.charAt(0) : p.email.charAt(0)}
+                        {p.fullName.charAt(0)}
                       </div>
                       <div className="flex flex-col">
                         <span className="text-sm font-medium text-gray-900">
-                          {p.name || p.email.split('@')[0]}
+                          {p.fullName}
+                          {p.userId === meeting.ownerId && (
+                            <span className="ml-2 text-xs text-indigo-600">(Owner)</span>
+                          )}
                         </span>
                         <span className="text-xs text-gray-500">{p.email}</span>
                       </div>
                     </div>
                     <StatusBadge status={p.status} />
-                    </div>
-                  ))}
-                </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <h2 className="text-lg font-semibold text-gray-900">Organizer</h2>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold">
-                  AM
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">
-                    Alex Morgan
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    alex.morgan@example.com
-                  </p>
-                </div>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
+
+          {/* Organizer Card - Always displayed */}
+          {organizer && (
+            <Card>
+              <CardHeader>
+                <h2 className="text-lg font-semibold text-gray-900">Organizer</h2>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold">
+                    {organizer.fullName.charAt(0)}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {organizer.fullName}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {organizer.email}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
+      </form>
     </div>
   )
 }

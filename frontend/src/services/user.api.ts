@@ -36,4 +36,10 @@ export const deleteAccount = async (): Promise<void> => {
   await axios.delete(API_ENDPOINTS.USERS.BASE + '/account');
 };
 
-
+/**
+ * Get user by ID (for displaying organizers, etc.)
+ */
+export const getUserById = async (userId: string): Promise<User> => {
+  const response = await axios.get<{ user: User }>(`${API_ENDPOINTS.USERS.BASE}/${userId}`);
+  return response.data.user;
+};

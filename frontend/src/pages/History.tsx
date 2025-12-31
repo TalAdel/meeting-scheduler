@@ -1,82 +1,91 @@
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, CardContent } from '../components/ui/Card'
 import { StatusBadge } from '../components/ui/StatusBadge'
-import { formatDate, formatTime } from '../lib/utils'
+import { formatTime } from '../lib/utils'
 import { Calendar, Clock, ArrowRight } from 'lucide-react'
+import { getUserMeetings } from '../services/meeting.api'
+import type { Meeting } from '../types/meeting.types'
 
 /**
- * HistoryPage Component
+ * HistoryPage - NOW CONNECTED TO BACKEND!
  * 
- * WHY? Shows completed meetings for reference and records
- * 
- * The Logic Behind the UX:
- * 1. Reverse chronological order (most recent first)
- * 2. Card-based layout for easy scanning
- * 3. Date badge for quick identification
- * 4. "attended" status badge for all past meetings
- * 5. Click to view details
- * 
- * Design Pattern:
- * - Simple list view (no complex filtering needed for history)
- * - Visual differentiation from upcoming meetings (muted colors)
- * - Empty state encourages first meeting
- * 
- * State Management:
- * - Mock data for now (will fetch from API)
- * - Filtered to show only past meetings
+ * Backend Integration:
+ * - GET /api/v1/meetings - Fetches all meetings
+ * - Filters to show only past meetings (startTime < now)
  * - Sorted by date (newest first)
  */
 
-// Mock past meetings
-const mockPastMeetings = [
-  {
-    id: 'm-3',
-    title: 'Client Kickoff - Acme Corp',
-    start_time: new Date(Date.now() - 86400000).toISOString(), // Yesterday
-    end_time: new Date(Date.now() - 82800000).toISOString(),
-    location: '123 Business Rd, Tech City',
-    notes: 'Initial kickoff meeting with the new client.',
-    owner_id: 'user-1',
-    participants: [
-      { email: 'client@acme.com', status: 'attended' as const, name: 'John Doe' },
-    ],
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 'm-4',
-    title: 'Sprint Planning - Q3',
-    start_time: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
-    end_time: new Date(Date.now() - 169200000).toISOString(),
-    location: 'Virtual (Zoom)',
-    notes: 'Planning for Q3 sprint goals.',
-    owner_id: 'user-1',
-    participants: [
-      { email: 'team@example.com', status: 'attended' as const, name: 'Team Member' },
-    ],
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-]
-
 function History() {
-  const pastMeetings = mockPastMeetings.sort(
-    (a, b) =>
-      new Date(b.start_time).getTime() - new Date(a.start_time).getTime(),
-  )
+  const [meetings, setMeetings] = useState<Meeting[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string>('')
+
+  useEffect(() => {
+    const fetchMeetings = async () => {
+      try {
+        setIsLoading(true)
+        setError('')
+        const data = await getUserMeetings()
+        
+        // Filter and sort past meetings
+        const pastMeetings = data
+          .filter((m) => new Date(m.startTime) < new Date())
+          .sort(
+            (a, b) =>
+              new Date(b.startTime).getTime() - new Date(a.startTime).getTime(),
+          )
+        
+        setMeetings(pastMeetings)
+      } catch (err: any) {
+        console.error('Error fetching meetings:', err)
+        setError(err.response?.data?.message || 'Failed to load meeting history')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchMeetings()
+  }, [])
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading history...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold text-gray-900">Meeting History</h1>
+        <Card className="bg-red-50">
+          <CardContent className="p-6 text-center">
+            <p className="text-red-600">{error}</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900">Meeting History</h1>
         <div className="text-sm text-gray-500">
-          Total: {pastMeetings.length} meetings
+          Total: {meetings.length} meetings
         </div>
       </div>
 
       <div className="grid gap-4">
-        {pastMeetings.length > 0 ? (
-          pastMeetings.map((meeting) => (
+        {meetings.length > 0 ? (
+          meetings.map((meeting) => (
             <Link key={meeting.id} to={`/meeting/${meeting.id}`}>
               <Card
                 hover
@@ -86,7 +95,7 @@ function History() {
                   <div className="flex items-center gap-6">
                     <div className="flex flex-col items-center justify-center w-14 h-14 bg-gray-100 rounded-lg text-gray-500 border border-gray-200">
                       <span className="text-xs font-bold uppercase">
-                        {new Date(meeting.start_time).toLocaleDateString(
+                        {new Date(meeting.startTime).toLocaleDateString(
                           'en-US',
                           {
                             month: 'short',
@@ -94,7 +103,7 @@ function History() {
                         )}
                       </span>
                       <span className="text-xl font-bold">
-                        {new Date(meeting.start_time).getDate()}
+                        {new Date(meeting.startTime).getDate()}
                       </span>
                     </div>
                     <div>
@@ -104,10 +113,10 @@ function History() {
                       <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
                         <span className="flex items-center gap-1">
                           <Clock className="w-3.5 h-3.5" />
-                          {formatTime(meeting.start_time)}
+                          {formatTime(meeting.startTime)}
                         </span>
                         <span>•</span>
-                        <StatusBadge status="attended" />
+                        <StatusBadge status={meeting.userStatus || 'attended'} />
                       </div>
                     </div>
                   </div>

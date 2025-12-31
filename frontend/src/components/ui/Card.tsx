@@ -4,7 +4,7 @@ import { cn } from '../../lib/utils'
 /**
  * Card Component with sub-components
  * 
- * WHY? Following the Compound Component pattern:
+ * following the Compound Component pattern:
  * - Provides flexible card structure
  * - Each sub-component handles its own styling
  * - Makes the code more maintainable and readable
@@ -15,22 +15,6 @@ import { cn } from '../../lib/utils'
  * - CardContent: Main content area
  * - CardFooter: Bottom section for actions
  * 
- * The hover prop:
- * - Adds interactive feedback for clickable cards
- * - Improves UX by signaling interactivity
- * 
- * EXAMPLE Usage:
- * <Card hover>
- *   <CardHeader>
- *     <h2>Meeting Title</h2>
- *   </CardHeader>
- *   <CardContent>
- *     <p>Meeting details...</p>
- *   </CardContent>
- *   <CardFooter>
- *     <Button>View Details</Button>
- *   </CardFooter>
- * </Card>
  */
 
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {

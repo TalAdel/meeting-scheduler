@@ -107,7 +107,7 @@ class UserRepository{
       createdAt: user.created_at,
       updatedAt: user.updated_at,
       };
-  }
+    }
 
     async updateUser(id: string, updates: Partial<Pick<User, 'fullName' | 'email' >>): Promise<User | null> {
 
@@ -162,7 +162,7 @@ class UserRepository{
       }
       
       return result.rowCount > 0;
-  }
+    }
     
     async updatePassword(id: string, password: string): Promise<boolean> { 
       const updatePasswordQuery = `UPDATE users SET password = $1 WHERE id = $2`;

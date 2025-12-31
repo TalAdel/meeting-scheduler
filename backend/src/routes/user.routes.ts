@@ -44,16 +44,6 @@ router.get(
     }
 );
 
-/**
- * PUT /users/profile
- * Update current user's profile (partial updates allowed)
- * 
- * Body can include:
- * - fullName only
- * - email only
- * - both fullName and email
- * - neither (returns current user)
- */
 router.put(
     '/profile',
     authenticate,
@@ -79,10 +69,18 @@ router.put(
     }
 );
 
-/**
- * DELETE /users/account
- * Delete current user's account
- */
+
+router.get(
+    '/:id',
+    authenticate,
+    async (req: Request, res: Response): Promise<void> => {
+        const userId = req.params.id;
+        const user = await userService.getUserProfile(userId);
+        res.status(200).json({ user });
+    }
+);
+
+// just for implementing the delete CRUD operation for user, its only for development purposes
 router.delete(
     '/account',
     authenticate,

@@ -35,11 +35,14 @@ class MeetingService{
         title: string,
         startTime: Date,
         endTime: Date,
-        location: string,
+        location: string | null,
         notes: string | null,
         ownerId: string,
         emails: string[],
-        status?: AttendingStatus
+        status?: AttendingStatus,
+        locationCountry?: string | null,
+        latitude?: number | null,
+        longitude?: number | null
     ): Promise<{ meeting: Meeting; participants: MeetingUser[] }> {
         
         if (!this.meetingUserService) {
@@ -55,6 +58,9 @@ class MeetingService{
                 location,
                 notes,
                 ownerId,
+                locationCountry,
+                latitude,
+                longitude,
                 client
             );
 
@@ -73,16 +79,30 @@ class MeetingService{
         title: string, 
         startTime: Date, 
         endTime: Date, 
-        location: string, 
+        location: string | null, 
         notes: string | null, 
         ownerId: string,
+        locationCountry?: string | null,
+        latitude?: number | null,
+        longitude?: number | null,
         client?: PoolClient
     ): Promise<Meeting>{
         if(await this.meetingRepository.hasConflict(ownerId, startTime, endTime, undefined, client)){
             throw new CustomError(400, 'Meeting time conflicts with existing meetings');
         }
         
-        const newMeeting = await this.meetingRepository.createMeeting(title, startTime, endTime, location, notes, ownerId, client);
+        const newMeeting = await this.meetingRepository.createMeeting(
+            title, 
+            startTime, 
+            endTime, 
+            location, 
+            notes, 
+            ownerId,
+            locationCountry,
+            latitude,
+            longitude,
+            client
+        );
         return newMeeting;
     }
 
@@ -110,30 +130,14 @@ class MeetingService{
 
     /**
      * Gets ALL meetings for a user (both owned AND invited to)
-     * This is what you want for the home page after sign-in!
+     * for the home page after sign-in
      */
     async getUserMeetings(userId: string): Promise<Meeting[]> {
-        // This single method uses the JOIN query to get everything!
         const meetings = await this.meetingRepository.findAllUserMeetings(userId);
-        
-        // Return empty array if no meetings (better UX for new users)
+
         return meetings;
     }
 
-    //   async getMeetingsInRange(startDate: string, endDate: string): Promise<Meeting[] | null> {
-    //     const start = parseDate(startDate, 'startDate');
-    //     const end = parseDate(endDate, 'endDate');
-    
-    //     if (end <= start) {
-    //       throw new CustomError(400, 'End date must be after start date');
-    //     }
-    
-    //     const meetings = await this.meetingRepository.findMeetingsInRange(start, end);
-    //     if(!meetings){
-    //         throw new CustomError(404, 'No meetings found');
-    //     }
-    //     return meetings;
-    // } 
 
     async updateMeeting(
         meetingId: string,
@@ -151,33 +155,12 @@ class MeetingService{
           throw new CustomError(403, 'You are not authorized to update this meeting');
         }
     
-        // 2. CLEAN: Remove undefined fields (keep only fields user wants to update)
         const validUserUpdates = MeetingService.removeUndefined<UpdateMeetingRequest>(userUpdates);
     
-        // 3. EARLY RETURN: If no fields to update, return existing meeting
         if (Object.keys(validUserUpdates).length === 0) {
           return existing;
         }
     
-        // // 3.5. VALIDATE: When updating times, both must be provided together
-        // const isUpdatingStartTime = validUserUpdates.startTime !== undefined;
-        // const isUpdatingEndTime = validUserUpdates.endTime !== undefined;
-    
-        // if (isUpdatingStartTime && !isUpdatingEndTime) {
-        //   throw new CustomError(
-        //     400,
-        //     'When updating startTime, you must also provide endTime to ensure valid meeting duration'
-        //   );
-        // }
-    
-        // if (isUpdatingEndTime && !isUpdatingStartTime) {
-        //   throw new CustomError(
-        //     400,
-        //     'When updating endTime, you must also provide startTime to ensure valid meeting duration'
-        //   );
-        // }
-    
-        // 4. VALIDATE: Check time constraints BEFORE sending to database
         const finalStartTime = validUserUpdates.startTime ?? existing.startTime;
         const finalEndTime = validUserUpdates.endTime ?? existing.endTime;
     
@@ -192,7 +175,6 @@ class MeetingService{
           throw new CustomError(400, 'Start and end time cannot be in the past');
         }
     
-        // 5. CHECK CONFLICTS: Only if time is being updated
         const isTimeBeingUpdated = validUserUpdates.startTime !== undefined || validUserUpdates.endTime !== undefined;
         if (isTimeBeingUpdated) {
           const hasConflict = await this.meetingRepository.hasConflict(
@@ -207,7 +189,6 @@ class MeetingService{
           }
         }
     
-        // 6. UPDATE: Express 5 automatically catches async errors
         const updated = await this.meetingRepository.updateMeeting(meetingId, validUserUpdates);
         return updated;
       }
@@ -235,29 +216,20 @@ class MeetingService{
         }
         return result;
       } 
-
-    //   async getDailySchedule(userId: string, date: string) {
-    //     const searchDate = parseDate(date, 'date');
+    //   async getMeetingsInRange(startDate: string, endDate: string): Promise<Meeting[] | null> {
+    //     const start = parseDate(startDate, 'startDate');
+    //     const end = parseDate(endDate, 'endDate');
     
-    //     const meetings = await this.meetingRepository.findUserMeetingsByDate(
-    //       userId, 
-    //       searchDate
-    //     );
+    //     if (end <= start) {
+    //       throw new CustomError(400, 'End date must be after start date');
+    //     }
     
-    //     // Calculate total meeting time
-    //     const totalMinutes = meetings.reduce((total, meeting) => {
-    //       const duration = meeting.endTime.getTime() - meeting.startTime.getTime();
-    //       return total + (duration / (1000 * 60));
-    //     }, 0);
-    
-    //     return {
-    //       date: searchDate,
-    //       meetings,
-    //       totalMeetings: meetings.length,
-    //       totalHours: (totalMinutes / 60).toFixed(1),
-    //       totalMinutes: Math.round(totalMinutes),
-    //     };
-    //   }
+    //     const meetings = await this.meetingRepository.findMeetingsInRange(start, end);
+    //     if(!meetings){
+    //         throw new CustomError(404, 'No meetings found');
+    //     }
+    //     return meetings;
+    // } 
     
     
 }

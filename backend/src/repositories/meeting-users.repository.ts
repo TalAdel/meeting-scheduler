@@ -39,8 +39,6 @@ class MeetingUsersRepository{
         client?: PoolClient
       ): Promise<MeetingUser[]> {
         const dbClient = client || this.pool;
-        // Build placeholders: ($1, $2, $n+2), ($1, $3, $n+2), ($1, $4, $n+2), ...
-        // meetingId ($1) and status ($n+2) are shared, userIds are $2 through $n+1
         const valuesPlaceholders = userIds
           .map((_, index) => `($1, $${index + 2}, $${userIds.length + 2})`)
           .join(', ');
