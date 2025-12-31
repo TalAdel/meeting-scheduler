@@ -25,20 +25,7 @@ import fs from 'fs';
 import path from 'path';
 import pool from '../config/database';
 
-/**
- * Migration System - Runs all .sql files in order
- * 
- * WHY? We need to track which migrations have been applied to avoid re-running them.
- * 
- * The Logic:
- * 1. Create a migrations tracking table if it doesn't exist
- * 2. Read all .sql files from migrations folder
- * 3. Sort by filename (001, 002, 003, etc.)
- * 4. Check which have already been run
- * 5. Run only new migrations in order
- * 
- * This is similar to how frameworks like Django, Rails, Laravel handle migrations.
- */
+
 
 async function createMigrationsTable() {
     const createTableSQL = `
