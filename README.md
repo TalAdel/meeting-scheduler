@@ -11,9 +11,9 @@ The application includes a seed script that creates realistic demo data for easy
 **Demo Accounts:**
 | Email | Password | Name |
 |-------|----------|------|
-| `talf16@gmail.com` | `Tal123456!` | Tal Adler |
-| `liran@gmail.com` | `liran123456!` | Liran Cohen |
-| `yeal@gmail.com` | `yeal123456!` | Yeal Sharon |
+| `talf16@gmail.com` | `Tal123456!` | Tal Adel |
+| `liran@gmail.com` | `liran123456!` | Liran Mazor |
+| `yeal@gmail.com` | `yeal123456!` | Yeal Priz |
 
 **What the seed creates:**
 - ✅ 3 demo users with realistic profiles
